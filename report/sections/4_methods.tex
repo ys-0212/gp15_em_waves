@@ -1,0 +1,99 @@
+\section{Diagnostic Methodologies}
+\label{sec:methods}
+
+\subsection{Unified Preprocessing Pipeline}
+To ensure rigorous benchmarking, all models consume identical preprocessed inputs derived from a single canonical function. A raw trace $v(0, t)$ is normalized against the incident plateau step $v_{\mathrm{inc}}$:
+\begin{equation}
+\tilde{v}(t) = \frac{v(0, t)}{v_{\mathrm{inc}}}
+\label{eq:v_norm}
+\end{equation}
+Three parallel feature channels are constructed:
+\begin{enumerate}
+    \item \textbf{Normalized Voltage $\tilde{v}(t)$:} Encodes baseline plateaus and reflection step levels.
+    \item \textbf{Numerical Derivative $d\tilde{v}/dt$:} Implemented via a Savitzky-Golay finite impulse response (FIR) filter (window length 11, polynomial degree 2, first derivative) wrapped in a 1D convolution layer. This sharpens inflection points and isolates high-frequency wave arrival edges while suppressing high-frequency AWGN.
+    \item \textbf{Dimensionless Coordinate Channel $t/T_{\mathrm{nom}}$:} Linearly ramps from $0.0$ to $2.5 \cdot (1023/1024)$, providing explicit temporal and spatial reference coordinates.
+\end{enumerate}
+The resulting input tensor has shape $[3, 1024]$ across batch samples.
+
+\subsection{Conventional TDR Solver (Rule-Based Baseline)}
+The Conventional TDR baseline algorithm operates in five sequential steps:
+\begin{enumerate}
+    \item \textbf{Noise Floor Estimation:} Evaluates the Median Absolute Deviation (MAD) of the derivative channel over the initial undisturbed line plateau $t/T \in [0.09, 0.11]$:
+    \begin{equation}
+    \hat{\sigma} = 1.4826 \cdot \mathrm{median}\left( \left| \frac{d\tilde{v}}{dt} - \mathrm{median}\left(\frac{d\tilde{v}}{dt}\right) \right| \right)
+    \end{equation}
+    \item \textbf{Peak Detection:} Identifies local peaks in $|d\tilde{v}/dt|$ exceeding an adaptive threshold $h = k_\sigma \hat{\sigma}$ with a minimum sample separation. The multiplier $k_\sigma \in [3, 6]$ is tuned via grid search on the validation split.
+    \item \textbf{Fault Identification:} Peaks located within $t/T \in [0.11, 0.98]$ represent candidate faults. If no peak exceeds threshold, the line is classified as `none`. Otherwise, the earliest peak at $t_1$ is classified by edge polarity and amplitude:
+    \begin{equation}
+    \hat{\Gamma}_1 = \tilde{v}(t_1 + \delta) - \tilde{v}(t_1 - \delta)
+    \end{equation}
+    Negative steps ($\hat{\Gamma}_1 < -0.6$) map to `short`, positive steps ($\hat{\Gamma}_1 > 0.6$) map to `open`, intermediate negative values map to `shunt_R` or `shunt_C` (differentiated by transient recovery), positive values to `series_R`, and double-peaked opposite-sign reflections to `z0_section`.
+    \item \textbf{Fault Localization:} The fault distance fraction is derived as:
+    \begin{equation}
+    \hat{d} = (\hat{t}_1 - 0.05) \cdot l
+    \end{equation}
+    \item \textbf{Load Characterization:} Evaluates the waveform steady-state level and exponential decay over the terminal reflection window $t/T \in [0.98, 1.50]$.
+\end{enumerate}
+
+\subsection{LightGBM with 94 Physics Features}
+We engineer 94 physics-informed features from the preprocessed 3-channel input:
+\begin{itemize}
+    \item \textbf{Global Statistics (10):} Mean, standard deviation, skewness, kurtosis, minimum, maximum, energy, and MAD across channels.
+    \item \textbf{Incident Edge Features (5):} Launch step amplitude, 10\%--90\% rise time, peak derivative magnitude, and launch offset.
+    \item \textbf{Peak Distribution (15):} Counts of positive and negative derivative peaks, prominence statistics, and inter-peak intervals.
+    \item \textbf{Segment Plateau Moments (40):} Mean, variance, and median levels over 8 physically motivated intervals: launch ($[0, 0.08]$), early fault ($[0.08, 0.40]$), mid fault ($[0.40, 0.70]$), late fault ($[0.70, 0.95]$), load arrival ($[0.95, 1.05]$), load transient ($[1.05, 1.30]$), and late steady-state ($[1.30, 2.45]$).
+    \item \textbf{Discontinuity Physics (12):} First-echo reflection coefficient $\Gamma_1$, estimated local impedance ratio $Z_1/Z_0 = (1+\Gamma_1)/(1-\Gamma_1)$, and duration of localized bumps.
+    \item \textbf{Load Tail Dynamics (12):} Overshoot, undershoot, steady-state terminal voltage, and fitted exponential decay slope $\hat{\tau}/T$ via log-linear regression on $|v(t) - v_\infty|$.
+\end{itemize}
+We deploy a suite of four Gradient Boosted Decision Tree ensembles (LightGBM \cite{ke2017lightgbm}) for fault classification, location regression, load classification, and load parameter regression ($R_L, \tau/T$). Each model employs 1,000 estimators with early stopping (50 rounds) on validation loss.
+
+\subsection{Deep Multi-Task 1D-ResNet Architecture}
+To exploit continuous temporal hierarchies and avoid manual feature design, we design a deep Multi-Task 1D-ResNet \cite{he2016deep} operating directly on the $[3, 1024]$ input tensor:
+\begin{itemize}
+    \item \textbf{Stem Layer:} A 1D convolution with kernel size 7, stride 2, padding 3 mapping $3 \to 32$ channels, followed by 1D Batch Normalization and ReLU activation, reducing sequence length to 512.
+    \item \textbf{Four Residual Stages:} Each stage comprises two residual blocks with skip connections:
+    \begin{itemize}
+        \item Stage 1: 32 channels, stride 1 (length 512).
+        \item Stage 2: 64 channels, stride 2 (length 256).
+        \item Stage 3: 128 channels, stride 2 (length 128).
+        \item Stage 4: 256 channels, stride 2 (length 64).
+    \end{itemize}
+    \item \textbf{Latent Embedding:} Global adaptive average pooling compresses spatial length to 1, followed by a fully connected projection layer mapping $256 \to 256$ dimensions with Batch Normalization, ReLU, and 20\% dropout.
+    \item \textbf{Task-Specific Prediction Heads:}
+    \begin{itemize}
+        \item Head 1 (T1 Fault): Linear($256 \to 7$) producing class logits $\mathbf{z}_{\mathrm{fault}}$.
+        \item Head 2 (T2 Location): Linear($256 \to 1$) followed by Sigmoid activation, constraining $\hat{d}/l \in [0, 1]$.
+        \item Head 3 (T3 Load Class): Linear($256 \to 6$) producing class logits $\mathbf{z}_{\mathrm{load}}$.
+        \item Head 4 (T3 Load Values): Linear($256 \to 2$) regressing log-scaled parameters $[\log_{10} \hat{R}_L, \log_{10}(\hat{\tau}/T)]$.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Physics-Masked Multi-Task Loss Formulation}
+Joint multi-task optimization is governed by our physics-masked loss function:
+\begin{equation}
+\mathcal{L}_{\mathrm{total}} = w_1 \mathcal{L}_{\mathrm{fault}} + w_2 \mathcal{L}_{\mathrm{loc}} + w_3 \mathcal{L}_{\mathrm{load\_cls}} + w_4 \mathcal{L}_{\mathrm{load\_reg}}
+\label{eq:total_loss}
+\end{equation}
+where loss balancing weights are set to $w_1 = 1.0, w_2 = 5.0, w_3 = 1.0, w_4 = 2.0$.
+
+The component losses strictly respect the physical masking conditions:
+\begin{enumerate}
+    \item \textbf{Fault Classification Loss (Unmasked):}
+    \begin{equation}
+    \mathcal{L}_{\mathrm{fault}} = -\log\left( \frac{\exp(z_{\mathrm{fault}, y_1})}{\sum_{c=1}^7 \exp(z_{\mathrm{fault}, c})} \right)
+    \end{equation}
+    \item \textbf{Fault Location Loss (Masked on Fault Presence):} Evaluated only when true fault class is not `none` ($m_{\mathrm{loc}} = \mathbb{I}(y_1 \ne \text{`none`})$):
+    \begin{equation}
+    \mathcal{L}_{\mathrm{loc}} = \frac{\sum_{i=1}^B m_{\mathrm{loc}, i} \cdot \mathrm{Smooth}_{L_1}(\hat{d}_i/l - d_i/l)}{\sum_{i=1}^B m_{\mathrm{loc}, i} + \epsilon}
+    \end{equation}
+    \item \textbf{Load Classification Loss (Masked on Transmissibility):} Evaluated only when the fault is not a hard short or open ($m_{\mathrm{load}} = \mathbb{I}(y_1 \notin \{\text{`short`}, \text{`open`}\})$):
+    \begin{equation}
+    \mathcal{L}_{\mathrm{load\_cls}} = \frac{\sum_{i=1}^B m_{\mathrm{load}, i} \cdot \mathrm{CE}(\mathbf{z}_{\mathrm{load}, i}, y_{3, i})}{\sum_{i=1}^B m_{\mathrm{load}, i} + \epsilon}
+    \end{equation}
+    \item \textbf{Load Value Regression Loss (Masked):}
+    \begin{equation}
+    \mathcal{L}_{\mathrm{load\_reg}} = \frac{\sum_{i=1}^B m_{\mathrm{load}, i} \cdot \mathrm{Smooth}_{L_1}(\hat{\mathbf{r}}_i - \mathbf{r}_i)}{\sum_{i=1}^B m_{\mathrm{load}, i} + \epsilon}
+    \end{equation}
+\end{enumerate}
+Masking guarantees that non-existent targets never inject corrupting gradients into the shared residual backbone.
+

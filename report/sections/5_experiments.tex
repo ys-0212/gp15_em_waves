@@ -1,0 +1,45 @@
+\section{Experimental Protocol \& Evaluation Metrics}
+\label{sec:experiments}
+
+\subsection{Evaluation Metrics}
+Diagnostic performance across the three tasks is measured using the following standardized metrics:
+\begin{enumerate}
+    \item \textbf{Task 1 (Fault Classification):}
+    \begin{itemize}
+        \item Overall Classification Accuracy (\%).
+        \item Macro-Averaged $F_1$ Score: unweighted mean across all 7 classes, penalizing poor performance on minority fault categories.
+        \item 7 $\times$ 7 Confusion Matrices.
+    \end{itemize}
+    \item \textbf{Task 2 (Fault Localization):} Computed strictly over all samples where the ground-truth fault is present ($y_{\mathrm{fault}} \ne \text{`none`}$):
+    \begin{itemize}
+        \item Mean Absolute Error in metres: $\mathrm{MAE} = \frac{1}{N_{\mathrm{fault}}} \sum_{i=1}^{N_{\mathrm{fault}}} |\hat{d}_i - d_i|$.
+        \item Median Absolute Error in metres: robust to extreme outliers.
+        \item 90th Percentile Error ($P_{90}$ in metres): captures boundary failure cases.
+        \item Sub-Metre Localization Rate: fraction of faulty samples localized within $1.0$~m of ground truth ($\% < 1.0$~m).
+    \end{itemize}
+    \item \textbf{Task 3 (Load Characterization):} Computed strictly over samples where the load is physically observable ($y_{\mathrm{fault}} \notin \{\text{`short`}, \text{`open`}\}$):
+    \begin{itemize}
+        \item Load Classification Accuracy (\%) and Macro-$F_1$ across 6 classes.
+        \item Mean Absolute Percentage Error (MAPE) on termination resistance: $\mathrm{MAPE}(R_L) = \frac{100\%}{N} \sum |\hat{R}_{L, i} - R_{L, i}| / R_{L, i}$.
+        \item MAPE on derived inductance $\hat{L} = \hat{\tau}( \hat{R}_L + Z_0)$ for true $RL$ loads.
+        \item MAPE on derived capacitance $\hat{C} = \hat{\tau} / (\hat{R}_L + Z_0)$ for true $RC$ loads.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Experimental Suite (E1--E8)}
+Our experimental protocol comprises eight systematic investigations:
+\begin{itemize}
+    \item \textbf{E1: Benchmark Comparison:} Comprehensive evaluation of Conventional TDR, LightGBM, and 1D-ResNet on the held-out test split under standard operating conditions ($\mathrm{SNR} = 30$~dB).
+    \item \textbf{E2: Noise Sweep:} Evaluation across seven SNR levels: $\{60, 50, 40, 30, 25, 20, 15\}$~dB, quantifying graceful degradation against severe additive interference.
+    \item \textbf{E3: Out-of-Distribution Generalization:} Testing robustness on the five OOD partitions: long cables ($l \le 400$~m), high loss ($s_{\mathrm{loss}} \le 4.0$), structural impedance shifts ($Z_0 \ne 50\ \Omega$), sluggish rise times ($t_r \le 10$~ns), and near-load discontinuities ($l - d \le 3$~m).
+    \item \textbf{E4: Error Stratification:} Fine-grained breakdown of localization MAE as a function of relative distance along the line ($d/l$) and discontinuity reflection strength ($|\Gamma|$).
+    \item \textbf{E5: Sample Efficiency \& Learning Curves:} Benchmarking performance scaling with training set fractions $\{0.05, 0.10, 0.25, 0.50, 1.0\}$.
+    \item \textbf{E6: Ablation Studies:} Dissecting model components:
+    \begin{enumerate}
+        \item Input representation: 3-channel $(\tilde{v}, d\tilde{v}/dt, t/T)$ vs. 2-channel $(\tilde{v}, d\tilde{v}/dt)$ vs. single-channel $(\tilde{v})$.
+        \item Multi-task synergy: Joint multi-task learning vs. three independent single-task networks dedicated to T1, T2, and T3.
+    \end{enumerate}
+    \item \textbf{E7: Explainability via SHAP Analysis:} Global and local feature attributions using TreeExplainer \cite{lundberg2017unified} to interpret decision boundaries in the LightGBM models.
+    \item \textbf{E8: Empirical Validation on Laboratory TDR Data:} Evaluating zero-shot inference on physical coaxial cable measurements from the NREL WISE-CASING dataset \cite{nrel_wise_casing}.
+\end{itemize}
+

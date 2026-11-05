@@ -1,0 +1,130 @@
+{
+  "bounce_diagram": {
+    "open": {
+      "k0": {
+        "simulated": 0.6664634346961975,
+        "analytic": 0.6666666666666666,
+        "abs_diff": 0.0002032319704691199,
+        "passed": true
+      },
+      "k1": {
+        "simulated": 1.1109755039215088,
+        "analytic": 1.1111110666666688,
+        "abs_diff": 0.00013556274516002276,
+        "passed": true
+      },
+      "k2": {
+        "simulated": 0.9628048539161682,
+        "analytic": 0.9629629481481474,
+        "abs_diff": 0.00015809423197921113,
+        "passed": true
+      }
+    },
+    "short": {
+      "k0": {
+        "simulated": 0.6664634346961975,
+        "analytic": 0.6666666666666666,
+        "abs_diff": 0.0002032319704691199,
+        "passed": true
+      },
+      "k1": {
+        "simulated": 0.22195136547088623,
+        "analytic": 0.22222223999999957,
+        "abs_diff": 0.00027087452911334076,
+        "passed": true
+      },
+      "k2": {
+        "simulated": 0.07378072291612625,
+        "analytic": 0.07407410370370278,
+        "abs_diff": 0.00029338078757652764,
+        "passed": true
+      }
+    },
+    "150_ohm": {
+      "k0": {
+        "simulated": 0.6666658520698547,
+        "analytic": 0.6666666666666666,
+        "abs_diff": 8.145968118933311e-07,
+        "passed": true
+      },
+      "k1": {
+        "simulated": 0.8888882398605347,
+        "analytic": 0.888888888888889,
+        "abs_diff": 6.490283542825992e-07,
+        "passed": true
+      },
+      "k2": {
+        "simulated": 0.8518511652946472,
+        "analytic": 0.8518518518518519,
+        "abs_diff": 6.865572046432789e-07,
+        "passed": true
+      }
+    },
+    "10_ohm": {
+      "k0": {
+        "simulated": 0.6666587591171265,
+        "analytic": 0.6666666666666666,
+        "abs_diff": 7.907549540164815e-06,
+        "passed": true
+      },
+      "k1": {
+        "simulated": 0.37036073207855225,
+        "analytic": 0.37037037037037035,
+        "abs_diff": 9.638291818103717e-06,
+        "passed": true
+      },
+      "k2": {
+        "simulated": 0.3045167326927185,
+        "analytic": 0.30452674897119336,
+        "abs_diff": 1.0016278474855866e-05,
+        "passed": true
+      }
+    }
+  },
+  "reactive_tails": {
+    "RL": {
+      "fitted_tau_ns": 101.07994388409455,
+      "analytic_tau_ns": 101.08002884792486,
+      "relative_error": 8.405600125865266e-07,
+      "passed": true
+    },
+    "RC": {
+      "fitted_tau_ns": 101.08012797904242,
+      "analytic_tau_ns": 101.08002884792486,
+      "relative_error": 9.807191259117975e-07,
+      "passed": true
+    }
+  },
+  "fault_reflections": {
+    "short": {
+      "measured_gamma": -0.9999999403953552,
+      "nominal_gamma": -1.0,
+      "diff": 5.960464477539063e-08,
+      "passed": true
+    },
+    "open": {
+      "measured_gamma": 0.9999998807907104,
+      "nominal_gamma": 1.0,
+      "diff": 1.1920928955078125e-07,
+      "passed": true
+    },
+    "shunt_R": {
+      "measured_gamma": -0.5,
+      "nominal_gamma": -0.5,
+      "diff": 0.0,
+      "passed": true
+    },
+    "series_R": {
+      "measured_gamma": 0.16666662693023682,
+      "nominal_gamma": 0.16666666666666666,
+      "diff": 3.973642984100856e-08,
+      "passed": true
+    },
+    "z0_section": {
+      "measured_gamma": 0.13043475151062012,
+      "nominal_gamma": 0.13043478260869565,
+      "diff": 3.109807553136612e-08,
+      "passed": true
+    }
+  }
+}

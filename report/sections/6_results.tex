@@ -1,0 +1,124 @@
+\section{Experimental Results \& Evaluation}
+\label{sec:results}
+
+\subsection{E1: Main Diagnostic Comparison on Held-Out Test Set}
+Table~\ref{tab:main_results} compares the performance of the Conventional TDR baseline, LightGBM (94 physics features), and the Multi-Task 1D-ResNet under standard operating conditions ($\mathrm{SNR} = 30$~dB). 
+
+\begin{table*}[t]
+\centering
+\caption{Benchmark Comparison across Fault Classification (T1), Fault Localization (T2), and Complex Load Identification (T3) on the Held-Out Test Split ($\mathrm{SNR} = 30$~dB).}
+\label{tab:main_results}
+\resizebox{\textwidth}{!}{
+\input{tables/main_comparison.tex}
+}
+\end{table*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_pipeline.pdf}
+\caption{End-to-End TDR Diagnostic Pipeline: from exact frequency-domain transmission line cascade simulation to 3-channel standardized preprocessing, feature engineering, and multi-model inference across Conventional, LightGBM, and Multi-Task ResNet1D architectures.}
+\label{fig:pipeline}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_sim_validation.pdf}
+\caption{Electromagnetic simulator validation: comparison against analytic lattice bounce diagrams on lossless lines ($R_g = 25\ \Omega$) and exact exponential transient tails for reactive $RL$ and $RC$ loads.}
+\label{fig:sim_val}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_fault_gallery.pdf}
+\caption{Exemplar clean TDR waveforms across the 7 fault classes for an identical cable geometry ($l = 100$~m, $d = 40$~m, matched termination).}
+\label{fig:fault_gallery}
+\end{figure}
+
+\subsection{E2: Noise Sweep \& Degradation Robustness}
+To quantify noise robustness against field EMI, models are evaluated across signal-to-noise ratios from 60~dB down to 15~dB. Table~\ref{tab:noise_sweep} presents the degradation trajectories, and Fig.~\ref{fig:noise_sweep} illustrates the multi-task performance curves.
+
+\begin{table*}[t]
+\centering
+\caption{Noise Sweep Evaluation across Signal-to-Noise Ratios ($\mathrm{SNR} \in \{15, 20, 25, 30, 40, 50, 60\}$~dB).}
+\label{tab:noise_sweep}
+\resizebox{\textwidth}{!}{
+\input{tables/noise_sweep.tex}
+}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_noise_sweep.pdf}
+\caption{Noise sweep comparison across Conventional, LightGBM, and 1D-ResNet architectures showing graceful degradation across 15 to 60~dB SNR.}
+\label{fig:noise_sweep}
+\end{figure}
+
+\subsection{E3: Out-of-Distribution (OOD) Generalization}
+Table~\ref{tab:ood} reports diagnostic metrics across the five challenging physical stress distributions: long lines, high loss, characteristic impedance drift, degraded rise times, and near-load discontinuities. Figure~\ref{fig:ood} shows the relative degradation per subset.
+
+\begin{table*}[t]
+\centering
+\caption{Out-of-Distribution (OOD) Stress Testing across Five Distinct Physics Shift Regimes.}
+\label{tab:ood}
+\resizebox{\textwidth}{!}{
+\input{tables/ood_metrics.tex}
+}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_ood.pdf}
+\caption{Performance degradation across out-of-distribution (OOD) domains relative to standard test split performance.}
+\label{fig:ood}
+\end{figure}
+
+\subsection{E5 \& E6: Sample Efficiency, Ablations, and Loss Balancing}
+Table~\ref{tab:ablations} details the architectural and input representations ablation experiments, and Table~\ref{tab:learning_curve} summarizes data scaling trajectories.
+
+\begin{table}[h]
+\centering
+\caption{Ablation Study: Input Representations and Multi-Task Synergies.}
+\label{tab:ablations}
+\resizebox{\columnwidth}{!}{
+\input{tables/ablations.tex}
+}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Learning Curve Trajectory across Training Set Fractions.}
+\label{tab:learning_curve}
+\resizebox{\columnwidth}{!}{
+\input{tables/learning_curve.tex}
+}
+\end{table}
+
+\subsection{E7: Explainability via SHAP Attributions}
+Fig.~\ref{fig:shap} depicts the global SHAP feature importance for the LightGBM fault classifier. Features encoding early derivative extrema, localized impedance ratios ($Z_1/Z_0$), and first-reflection amplitudes dominate decision boundaries.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_shap.pdf}
+\caption{Top 20 most impactful physics features for LightGBM fault classification ranked by mean absolute SHAP value.}
+\label{fig:shap}
+\end{figure}
+
+\subsection{E8: Empirical Validation on Laboratory TDR Measurements}
+Table~\ref{tab:real_data} summarizes zero-shot inference on physical coaxial cable measurements from the NREL WISE-CASING dataset \cite{nrel_wise_casing}. Fig.~\ref{fig:real_data} displays the normalized experimental waveforms annotated with true and predicted discontinuity locations.
+
+\begin{table*}[t]
+\centering
+\caption{Zero-Shot Empirical Evaluation on Real NREL WISE-CASING Coaxial Cable Measurements.}
+\label{tab:real_data}
+\resizebox{\textwidth}{!}{
+\input{tables/real_data.tex}
+}
+\end{table*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_real_data.pdf}
+\caption{Zero-shot model predictions on real experimental TDR traces from the NREL WISE-CASING dataset, showing clean resolution of the 40~m shield cutaway.}
+\label{fig:real_data}
+\end{figure*}
+

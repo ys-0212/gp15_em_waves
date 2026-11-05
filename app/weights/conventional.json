@@ -1,0 +1,6 @@
+{
+  "best_k_sigma": 6.0,
+  "min_sep_samples": 6,
+  "transient_return_samples": 25,
+  "z0_nominal": 50.0
+}

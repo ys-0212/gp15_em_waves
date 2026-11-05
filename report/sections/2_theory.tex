@@ -1,0 +1,112 @@
+\section{Electromagnetic Wave Theory \& TDR Modeling}
+\label{sec:theory}
+
+\subsection{Telegrapher's Equations and Lossy Wave Propagation}
+TEM wave propagation along a uniform two-conductor transmission line is governed by the frequency-domain Telegrapher's Equations \cite{pozar2011microwave}:
+\begin{equation}
+\frac{d V(z, \omega)}{dz} = -Z(\omega) I(z, \omega), \quad \frac{d I(z, \omega)}{dz} = -Y(\omega) V(z, \omega)
+\label{eq:telegrapher}
+\end{equation}
+where $Z(\omega) = R(\omega) + j\omega L$ and $Y(\omega) = G(\omega) + j\omega C$ represent the series impedance and shunt admittance per unit length, respectively. Decoupling (\ref{eq:telegrapher}) yields the Helmholtz wave equations:
+\begin{equation}
+\frac{d^2 V(z, \omega)}{dz^2} - \gamma^2(\omega) V(z, \omega) = 0
+\end{equation}
+whose solutions comprise forward- and backward-traveling waves with complex propagation constant $\gamma(\omega) = \alpha(\omega) + j\beta(\omega) = \sqrt{Z(\omega)Y(\omega)}$ and characteristic impedance $Z_0(\omega) = \sqrt{Z(\omega)/Y(\omega)}$:
+\begin{equation}
+V(z, \omega) = V_0^+ e^{-\gamma(\omega) z} + V_0^- e^{+\gamma(\omega) z}
+\label{eq:wave_sol}
+\end{equation}
+
+\subsection{Lossy Coaxial Cable Physics (Skin Effect \& Dielectric Dissipation)}
+To realistically model RG-58-like coaxial cables, we incorporate both conductor and dielectric losses:
+\begin{enumerate}
+    \item \textbf{Skin Effect:} At radio frequencies, current concentrates within a surface layer of depth $\delta_s = \sqrt{2/(\omega \mu \sigma)}$. Consequently, the series resistance increases with the square root of frequency:
+    \begin{equation}
+    R(\omega) = R_{\mathrm{dc}} + k_{\mathrm{skin}} \sqrt{\frac{\omega}{2\pi}}
+    \label{eq:skin_effect}
+    \end{equation}
+    where $R_{\mathrm{dc}} = 0.04\ \Omega/\mathrm{m}$ is the DC resistance and $k_{\mathrm{skin}} = 1.5 \times 10^{-4}\ \Omega/(\mathrm{m}\cdot\sqrt{\mathrm{Hz}})$ governs the skin depth boundary layer.
+    \item \textbf{Dielectric Loss:} The insulating polyethylene dielectric possesses a non-zero loss tangent $\tan\delta$, yielding a shunt conductance directly proportional to frequency:
+    \begin{equation}
+    G(\omega) = \omega C \tan\delta
+    \label{eq:dielectric_loss}
+    \end{equation}
+    with $\tan\delta = 2.0 \times 10^{-4}$.
+\end{enumerate}
+The nominal phase velocity in the TEM mode is $u = v_f c = 1/\sqrt{LC}$, where $v_f \approx 0.66$ denotes the cable velocity factor and $c = 2.9979 \times 10^8\ \mathrm{m/s}$.
+
+\subsection{Reflection Coefficients and Discontinuity Boundary Conditions}
+When a propagating voltage wave encounters a localized impedance boundary $Z_{\mathrm{load}}$ at position $z$, the continuity of voltage and current dictates a reflected wave with voltage reflection coefficient $\Gamma$:
+\begin{equation}
+\Gamma = \frac{Z_{\mathrm{load}} - Z_0}{Z_{\mathrm{load}} + Z_0}
+\label{eq:gamma}
+\end{equation}
+
+\subsubsection{Hard Faults}
+\begin{itemize}
+    \item \textbf{Short Circuit ($Z_f \to 0$):} $\Gamma = -1$. The reflected pulse has equal amplitude and reversed polarity, forcing total terminal voltage to zero upon arrival.
+    \item \textbf{Open Circuit ($Z_f \to \infty$):} $\Gamma = +1$. The reflected pulse has equal amplitude and identical polarity, doubling the terminal voltage upon arrival.
+\end{itemize}
+
+\subsubsection{Soft Reactive and Resistive Faults}
+\begin{itemize}
+    \item \textbf{Shunt Faults ($Z_f$ in parallel with line):} The effective impedance seen at the discontinuity is the parallel combination of $Z_f$ and the downstream line impedance $Z_0$:
+    \begin{equation}
+    Z_{\mathrm{eff}} = \frac{Z_f Z_0}{Z_f + Z_0} \implies \Gamma_{\mathrm{shunt}} = \frac{-Z_0}{2 Z_f + Z_0}
+    \label{eq:gamma_shunt}
+    \end{equation}
+    For a shunt resistor $R_f$, $\Gamma_{\mathrm{shunt}} \in (-1, 0)$ produces a negative step echo. For a shunt capacitor $C_f$, the uncharged capacitor acts as an instantaneous short ($\Gamma \to -1$), recovering exponentially to $\Gamma \to 0$ as it charges, yielding a characteristic transient negative spike.
+    \item \textbf{Series Faults ($R_f$ in series with inner conductor):} The downstream impedance is $Z_0 + R_f$:
+    \begin{equation}
+    \Gamma_{\mathrm{series}} = \frac{(Z_0 + R_f) - Z_0}{(Z_0 + R_f) + Z_0} = \frac{R_f}{2 Z_0 + R_f}
+    \label{eq:gamma_series}
+    \end{equation}
+    Here $\Gamma_{\mathrm{series}} \in (0, 1)$, generating a positive step echo.
+    \item \textbf{Characteristic Impedance Section ($z_0\_section$):} A finite segment of length $w$ with altered geometry has local impedance $Z_0'$. Reflections occur at both the entry ($z=d$) with $\Gamma_1 = (Z_0' - Z_0)/(Z_0' + Z_0)$ and exit ($z=d+w$) with $\Gamma_2 = -\Gamma_1$, creating a rectangular pulse or flat pedestal of duration $\Delta t = 2w/u$.
+\end{itemize}
+
+\subsection{Complex Load Terminations and Reactive Time Constants}
+At the terminal end of the line ($z=l$), we evaluate six load classes:
+\begin{enumerate}
+    \item \textbf{Matched Load ($Z_L = Z_0$):} $\Gamma_L = 0$; no reflection returns from the load.
+    \item \textbf{Resistive Load ($Z_L = R_L$):} $\Gamma_L = (R_L - Z_0)/(R_L + Z_0)$.
+    \item \textbf{Inductive-Resistive Load ($RL$ Series):} The load impedance $Z_L(s) = R_L + sL$ yields the reflection coefficient in the Laplace domain:
+    \begin{equation}
+    \Gamma_L(s) = \frac{sL + R_L - Z_0}{sL + R_L + Z_0} = 1 - \frac{2 Z_0 / L}{s + (R_L + Z_0)/L}
+    \end{equation}
+    In response to an incident step $V_{\mathrm{inc}}$, the reflected waveform exhibits an initial open-circuit-like step ($\Gamma \to +1$) decaying exponentially toward the resistive steady-state $\Gamma_\infty = (R_L - Z_0)/(R_L + Z_0)$ with time constant:
+    \begin{equation}
+    \tau_{\mathrm{RL}} = \frac{L}{R_L + Z_0}
+    \label{eq:tau_rl}
+    \end{equation}
+    \item \textbf{Capacitive-Resistive Load ($RC$ Series):} The impedance $Z_L(s) = R_L + 1/(sC)$ produces:
+    \begin{equation}
+    \Gamma_L(s) = \frac{s C (R_L - Z_0) + 1}{s C (R_L + Z_0) + 1}
+    \end{equation}
+    The initial reflection corresponds to a purely resistive reflection $\Gamma_0 = (R_L - Z_0)/(R_L + Z_0)$, which subsequently charges toward an open-circuit state ($\Gamma_\infty \to +1$) with time constant:
+    \begin{equation}
+    \tau_{\mathrm{RC}} = C (R_L + Z_0)
+    \label{eq:tau_rc}
+    \end{equation}
+\end{enumerate}
+
+\subsection{Lattice Bounce Diagram \& Physics Masks}
+In a finite line of length $l$ fed by a generator $V_g(t)$ with source resistance $R_g$, the initial incident wave launched into the line at $t=0$ is:
+\begin{equation}
+V_{\mathrm{inc}} = V_g \cdot \frac{Z_0}{Z_0 + R_g}
+\label{eq:v_inc}
+\end{equation}
+The wave propagates toward the fault at $d$ and load at $l$, undergoing successive partial reflections and transmissions at the discontinuity, load ($\Gamma_L$), and generator ($\Gamma_g = (R_g - Z_0)/(R_g + Z_0)$).
+The round-trip transit time is defined as:
+\begin{equation}
+T_{\mathrm{nom}} = \frac{2 l}{u} = \frac{2 l}{v_f c}
+\label{eq:t_nom}
+\end{equation}
+A fault at distance $d$ produces its first echo at $t_f = 2d/u = (d/l) T_{\mathrm{nom}}$, while the load echo arrives at $t_L = T_{\mathrm{nom}}$.
+
+\textbf{Physical Masking Constraints:}
+\begin{itemize}
+    \item \textit{Fault Location Masking:} When a cable is pristine (`none`), no fault discontinuity exists; hence the fault location $d/l$ is physically undefined and must be masked out during both model training and metric computation.
+    \item \textit{Load Masking by Hard Discontinuities:} If the cable contains an ideal hard short ($\Gamma = -1$) or hard open ($\Gamma = +1$), the discontinuity acts as a perfect electromagnetic reflector. No forward wave energy penetrates past $z=d$ to interrogate the downstream cable or termination. Consequently, downstream load class and parameter predictions are unobservable and must be masked out for samples with `short` or `open` faults.
+\end{itemize}
+

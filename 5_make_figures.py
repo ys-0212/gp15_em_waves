@@ -1,0 +1,674 @@
+"""Publication-quality figure generator for all 16 research figures.
+
+Adheres strictly to style rules:
+- Consistent colorblind-safe palettes
+- 300-dpi PNG and vector PDF outputs in figures/
+- Synchronizes PDF figures to report/figures/ and LaTeX tables to report/tables/
+- Gracefully skips figures if inputs are missing
+"""
+
+import json
+from pathlib import Path
+import shutil
+import h5py
+import matplotlib as mpl
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import yaml
+
+from tdr.simulator import (
+    LineParams,
+    simulate_trace,
+    analytic_bounce_diagram,
+    analytic_reactive_tail,
+    compute_tnom,
+)
+from tdr.data import preprocess_numpy, FAULT_CLASSES, LOAD_CLASSES
+
+
+# Set matplotlib style
+mpl.rcParams.update({
+    "font.family": "serif",
+    "font.size": 10,
+    "axes.labelsize": 11,
+    "axes.titlesize": 12,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "legend.fontsize": 9,
+    "figure.titlesize": 13,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "axes.grid": True,
+    "grid.alpha": 0.3,
+})
+
+# Color-blind safe palette
+CB_COLORS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#F0E442", "#56B4E9", "#E69F00"]
+
+
+def save_fig(fig: plt.Figure, base_name: str, fig_dir: Path, report_fig_dir: Path):
+    """Save both PNG (300 dpi) and PDF, and copy PDF to report/figures/."""
+    fig_dir.mkdir(parents=True, exist_ok=True)
+    report_fig_dir.mkdir(parents=True, exist_ok=True)
+
+    png_path = fig_dir / f"{base_name}.png"
+    pdf_path = fig_dir / f"{base_name}.pdf"
+
+    fig.tight_layout()
+    fig.savefig(png_path, dpi=300)
+    fig.savefig(pdf_path, dpi=300)
+    shutil.copy2(pdf_path, report_fig_dir / f"{base_name}.pdf")
+    plt.close(fig)
+    print(f"  Saved {base_name} (PNG & PDF)")
+
+
+def sync_tables(results_dir: Path, report_dir: Path):
+    """Copy all LaTeX tables from results/tables/ to report/tables/."""
+    src_dir = results_dir / "tables"
+    dst_dir = report_dir / "tables"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    if src_dir.exists():
+        for tex_file in src_dir.glob("*.tex"):
+            shutil.copy2(tex_file, dst_dir / tex_file.name)
+        print("Synchronized LaTeX tables to report/tables/")
+
+
+# =========================================================================
+# Figure 1: Pipeline Block Diagram
+# =========================================================================
+def make_fig_pipeline(fig_dir: Path, rep_dir: Path):
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 5)
+    ax.axis("off")
+
+    # Boxes
+    boxes = [
+        ("Physics Simulator\n(ABCD Lossy Cascade)", (0.3, 1.8), (1.8, 1.4), "#56B4E9"),
+        ("TDR Traces\nClean Data + HDF5", (2.6, 1.8), (1.5, 1.4), "#E69F00"),
+        ("Preprocessing\n(Noise, Norm, SG-1D)", (4.6, 1.8), (1.7, 1.4), "#009E73"),
+    ]
+    for text, (x, y), (w, h), color in boxes:
+        rect = patches.FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.1", fc=color, ec="black", lw=1.2, alpha=0.85)
+        ax.add_patch(rect)
+        ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", weight="bold", fontsize=9)
+
+    # Models column
+    model_boxes = [
+        ("Conventional TDR\n(Rule-based solver)", (6.8, 3.2), (1.6, 0.9), "#CC79A7"),
+        ("LightGBM Suite\n(Engineered Features)", (6.8, 2.0), (1.6, 0.9), "#F0E442"),
+        ("Multi-Task ResNet\n(1D CNN Backbone)", (6.8, 0.8), (1.6, 0.9), "#0072B2"),
+    ]
+    for text, (x, y), (w, h), color in model_boxes:
+        rect = patches.FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.08", fc=color, ec="black", lw=1.2, alpha=0.85)
+        ax.add_patch(rect)
+        ax.text(x + w / 2, y + h / 2, text, ha="center", va="center", weight="bold", fontsize=8.5)
+
+    # Tasks Output
+    rect_out = patches.FancyBboxPatch((8.8, 1.5), 1.0, 2.0, boxstyle="round,pad=0.1", fc="#D55E00", ec="black", lw=1.2, alpha=0.85)
+    ax.add_patch(rect_out)
+    ax.text(9.3, 2.5, "Tasks:\nT1 Fault\nT2 Loc\nT3 Load", ha="center", va="center", weight="bold", color="white", fontsize=9)
+
+    # Arrows
+    arrows = [
+        ((2.1, 2.5), (2.6, 2.5)),
+        ((4.1, 2.5), (4.6, 2.5)),
+        ((6.3, 2.5), (6.8, 3.65)),
+        ((6.3, 2.5), (6.8, 2.45)),
+        ((6.3, 2.5), (6.8, 1.25)),
+        ((8.4, 3.65), (8.8, 2.7)),
+        ((8.4, 2.45), (8.8, 2.5)),
+        ((8.4, 1.25), (8.8, 2.3)),
+    ]
+    for (x1, y1), (x2, y2) in arrows:
+        ax.annotate("", xy=(x2, y2), xytext=(x1, y1), arrowprops=dict(arrowstyle="->", lw=1.5, color="black"))
+
+    save_fig(fig, "fig_pipeline", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 2: Simulator Validation
+# =========================================================================
+def make_fig_sim_validation(fig_dir: Path, rep_dir: Path):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+
+    # Panel 1: Bounce diagram
+    loads = [("open", 1e9, "Open", "#D55E00"), ("short", 1e-6, "Short", "#0072B2"), ("150", 150.0, "150 $\Omega$", "#009E73")]
+    for name, rl, label, color in loads:
+        p = LineParams(length_m=100.0, z0=50.0, vf=0.66, rg=25.0, v0=1.0, load_class="R" if name not in ("open", "short") else name, load_r=rl, rise_time_s=1.0e-9)
+        t_norm, v_sim = simulate_trace(p, lossless=True)
+        ax1.plot(t_norm, v_sim, label=f"Simulated ({label})", color=color, lw=1.5)
+
+        # Plot analytic levels
+        ana = analytic_bounce_diagram(1.0, 25.0, 50.0, rl, max_k=3)
+        for k in range(3):
+            t_mid = 0.05 + k + 0.5
+            ax1.plot(t_mid, ana[f"k{k}"], "k+", markersize=8, mew=2, label="Analytic" if k == 0 and name == "open" else "")
+
+    ax1.set_xlim(0, 2.5)
+    ax1.set_xlabel("Normalized Time $t / T_{nom}$")
+    ax1.set_ylabel("Input Voltage $V(0,t)$ (V)")
+    ax1.set_title("(a) Lossless Bounce Diagram ($R_g=25\ \Omega, Z_0=50\ \Omega$)")
+    ax1.legend(loc="upper right", fontsize=8)
+
+    # Panel 2: Reactive tails
+    length = 100.0
+    tnom = compute_tnom(length, 0.66)
+    for l_cls, color, lbl in [("RL", "#CC79A7", "Series RL"), ("RC", "#56B4E9", "Parallel RC")]:
+        p = LineParams(length_m=length, z0=50.0, rg=50.0, load_class=l_cls, load_r=75.0, load_tau_over_t=0.10, rise_time_s=1.0e-9)
+        t_norm, v_sim = simulate_trace(p, lossless=True)
+        ax2.plot(t_norm, v_sim, label=f"Simulated {lbl}", color=color, lw=1.5)
+
+        # Analytic exponential
+        t_sec = t_norm * tnom
+        ana_tail = analytic_reactive_tail(1.0, 50.0, 75.0, 0.10 * tnom, l_cls, t_sec, 1.05 * tnom)
+        mask = t_norm >= 1.05
+        ax2.plot(t_norm[mask], ana_tail[mask], "k--", lw=1.2, alpha=0.7, label=f"Analytic {lbl}" if l_cls == "RL" else "")
+
+    ax2.set_xlim(0.8, 2.0)
+    ax2.set_xlabel("Normalized Time $t / T_{nom}$")
+    ax2.set_ylabel("Voltage $V(0,t)$ (V)")
+    ax2.set_title("(b) Lossless Reactive Load Tails ($R_g=Z_0=50\ \Omega$)")
+    ax2.legend(loc="upper right", fontsize=8)
+
+    save_fig(fig, "fig_sim_validation", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 3: Fault Gallery
+# =========================================================================
+def make_fig_fault_gallery(fig_dir: Path, rep_dir: Path):
+    fault_configs = [
+        ("none", 0.0, 0.0, "No Fault"),
+        ("short", 0.0, 0.0, "Short ($Z_f=0$)"),
+        ("open", 0.0, 0.0, "Open ($Z_f=\infty$)"),
+        ("shunt_R", 25.0, 0.0, "Shunt R ($R_f=25\ \Omega$)"),
+        ("shunt_C", 150e-12, 0.0, "Shunt C ($C_f=150$ pF)"),
+        ("series_R", 20.0, 0.0, "Series R ($R_f=20\ \Omega$)"),
+        ("z0_section", 65.0, 3.0, "Impedance Discontinuity ($Z_0'=65\ \Omega$)"),
+    ]
+    fig, axes = plt.subplots(len(fault_configs), 1, figsize=(8, 11), sharex=True)
+
+    for i, (fc, val, w, label) in enumerate(fault_configs):
+        p = LineParams(length_m=100.0, z0=50.0, vf=0.66, fault_class=fc, fault_pos_m=40.0, fault_val=val, fault_width_m=w, load_class="matched", load_r=50.0, rise_time_s=1.5e-9)
+        t_norm, v = simulate_trace(p)
+        axes[i].plot(t_norm, v, color=CB_COLORS[i % len(CB_COLORS)], lw=1.5)
+        axes[i].set_ylabel("$V(0,t)$ (V)", fontsize=8)
+        axes[i].set_title(label, fontsize=9.5, loc="left", pad=2)
+        if fc != "none":
+            axes[i].axvline(0.45, color="red", linestyle=":", alpha=0.7)
+
+    axes[-1].set_xlabel("Normalized Time $t / T_{nom}$")
+    save_fig(fig, "fig_fault_gallery", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 4: Load Gallery
+# =========================================================================
+def make_fig_load_gallery(fig_dir: Path, rep_dir: Path):
+    load_configs = [
+        ("matched", 50.0, 0.0, "Matched Load ($R_L=50\ \Omega$)"),
+        ("open", 1e9, 0.0, "Open Load ($R_L=\infty$)"),
+        ("short", 1e-6, 0.0, "Short Load ($R_L=0$)"),
+        ("R", 150.0, 0.0, "Resistive Mismatch ($R_L=150\ \Omega$)"),
+        ("RL", 75.0, 0.10, "Series RL ($\tau=0.1 T_{nom}$)"),
+        ("RC", 75.0, 0.10, "Parallel RC ($\tau=0.1 T_{nom}$)"),
+    ]
+    fig, axes = plt.subplots(len(load_configs), 1, figsize=(8, 10), sharex=True)
+
+    for i, (lc, rl, tau, label) in enumerate(load_configs):
+        p = LineParams(length_m=100.0, z0=50.0, vf=0.66, fault_class="none", load_class=lc, load_r=rl, load_tau_over_t=tau, rise_time_s=1.5e-9)
+        t_norm, v = simulate_trace(p)
+        axes[i].plot(t_norm, v, color=CB_COLORS[i % len(CB_COLORS)], lw=1.5)
+        axes[i].set_ylabel("$V(0,t)$ (V)", fontsize=8)
+        axes[i].set_title(label, fontsize=9.5, loc="left", pad=2)
+        axes[i].axvline(1.05, color="green", linestyle="--", alpha=0.6)
+
+    axes[-1].set_xlabel("Normalized Time $t / T_{nom}$")
+    save_fig(fig, "fig_load_gallery", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 5: Loss Effect
+# =========================================================================
+def make_fig_loss_effect(fig_dir: Path, rep_dir: Path):
+    fig, ax = plt.subplots(figsize=(8, 4))
+    lengths = [20.0, 100.0, 200.0]
+    colors = ["#0072B2", "#009E73", "#D55E00"]
+
+    for l_val, c in zip(lengths, colors):
+        p = LineParams(length_m=l_val, z0=50.0, vf=0.66, fault_class="open", fault_pos_m=l_val * 0.4, load_class="matched", load_r=50.0, rise_time_s=1.5e-9)
+        t_norm, v = simulate_trace(p, lossless=False)
+        ax.plot(t_norm, v, label=f"Cable Length = {l_val:.0f} m", color=c, lw=1.5)
+
+    ax.set_xlim(0.35, 0.70)
+    ax.set_xlabel("Normalized Time $t / T_{nom}$")
+    ax.set_ylabel("Voltage $V(0,t)$ (V)")
+    ax.set_title("Frequency-Dependent Skin Effect & Dielectric Smearing vs. Cable Length")
+    ax.legend(loc="lower right")
+    save_fig(fig, "fig_loss_effect", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 6: Noise Examples
+# =========================================================================
+def make_fig_noise_examples(fig_dir: Path, rep_dir: Path):
+    p = LineParams(length_m=100.0, z0=50.0, fault_class="shunt_R", fault_pos_m=40.0, fault_val=30.0, load_class="RC", load_r=75.0, load_tau_over_t=0.08)
+    t_norm, v_clean = simulate_trace(p)
+
+    snr_levels = [50.0, 30.0, 15.0]
+    fig, axes = plt.subplots(3, 1, figsize=(8, 6), sharex=True)
+
+    for i, snr in enumerate(snr_levels):
+        preproc = preprocess_numpy(v_clean, v_inc=0.5, snr_db=snr, seed=42)
+        v_noisy = preproc[0, 0]
+        axes[i].plot(t_norm, v_noisy, color=CB_COLORS[i], lw=1.2)
+        axes[i].set_ylabel(r"$\tilde{v}(t)$", fontsize=9)
+        axes[i].set_title(f"SNR = {snr:.0f} dB", fontsize=10, loc="left")
+
+    axes[-1].set_xlabel("Normalized Time $t / T_{nom}$")
+    save_fig(fig, "fig_noise_examples", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 7: Hard Case (Weak Shunt R near RC Load)
+# =========================================================================
+def make_fig_hard_case(fig_dir: Path, rep_dir: Path):
+    fig, ax = plt.subplots(figsize=(8, 4))
+    # Weak shunt R (e.g. 500 ohm) near RC load (d/l = 0.90)
+    p_fault = LineParams(length_m=100.0, fault_class="shunt_R", fault_pos_m=90.0, fault_val=350.0, load_class="RC", load_r=60.0, load_tau_over_t=0.06)
+    p_nofault = LineParams(length_m=100.0, fault_class="none", load_class="RC", load_r=60.0, load_tau_over_t=0.06)
+
+    t_norm, v_clean = simulate_trace(p_fault)
+    _, v_nofault = simulate_trace(p_nofault)
+    preproc = preprocess_numpy(v_clean, v_inc=0.5, snr_db=25.0, seed=123)
+    v_noisy = preproc[0, 0]
+
+    ax.plot(t_norm, v_nofault / 0.5, label="No Fault (Pure RC Load)", color="gray", linestyle="--", lw=1.5)
+    ax.plot(t_norm, v_clean / 0.5, label="Weak Shunt-R Clean ($d/l=0.90, R_f=350\ \Omega$)", color="navy", lw=1.5)
+    ax.plot(t_norm, v_noisy, label="Weak Shunt-R Noisy (25 dB SNR)", color="crimson", alpha=0.65, lw=1.2)
+
+    ax.set_xlim(0.85, 1.45)
+    ax.set_xlabel("Normalized Time $t / T_{nom}$")
+    ax.set_ylabel(r"Normalized Voltage $\tilde{v}(t)$")
+    ax.set_title("Challenging TDR Scenario: High-Impedance Shunt Fault in Proximity to RC Load")
+    ax.legend(loc="upper right")
+    save_fig(fig, "fig_hard_case", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 8: Confusion Matrices (Fault and Load)
+# =========================================================================
+def make_fig_confusion_matrices(fig_dir: Path, rep_dir: Path):
+    results_dir = Path("results/runs")
+    methods = [("Conventional", "conventional"), ("LightGBM", "lgbm_s0"), ("ResNet1D", "resnet_s0")]
+
+    # 8a: Fault confusion matrix
+    fig_f, axes_f = plt.subplots(1, 3, figsize=(13, 4))
+    for i, (name, r_id) in enumerate(methods):
+        m_path = results_dir / r_id / "metrics.json"
+        if not m_path.exists():
+            continue
+        with open(m_path, "r") as f:
+            m = json.load(f)
+        cm = np.array(m["t1_fault"]["confusion_matrix"])
+        cm_norm = cm.astype(float) / np.maximum(1, cm.sum(axis=1, keepdims=True))
+        im = axes_f[i].imshow(cm_norm, cmap="Blues", vmin=0, vmax=1)
+        axes_f[i].set_title(f"{name} (Acc: {m['t1_fault']['accuracy']*100:.1f}%)")
+        axes_f[i].set_xticks(range(len(FAULT_CLASSES)))
+        axes_f[i].set_yticks(range(len(FAULT_CLASSES)))
+        axes_f[i].set_xticklabels(FAULT_CLASSES, rotation=45, ha="right", fontsize=7.5)
+        if i == 0:
+            axes_f[i].set_yticklabels(FAULT_CLASSES, fontsize=7.5)
+            axes_f[i].set_ylabel("True Fault")
+        else:
+            axes_f[i].set_yticklabels([])
+        axes_f[i].set_xlabel("Predicted Fault")
+
+    fig_f.colorbar(im, ax=axes_f, orientation="horizontal", fraction=0.05, pad=0.25, label="Recall Proportion")
+    save_fig(fig_f, "fig_confusion_fault", fig_dir, rep_dir)
+
+    # 8b: Load confusion matrix
+    fig_l, axes_l = plt.subplots(1, 3, figsize=(12, 4))
+    for i, (name, r_id) in enumerate(methods):
+        m_path = results_dir / r_id / "metrics.json"
+        if not m_path.exists():
+            continue
+        with open(m_path, "r") as f:
+            m = json.load(f)
+        cm = np.array(m["t3_load"]["confusion_matrix"])
+        cm_norm = cm.astype(float) / np.maximum(1, cm.sum(axis=1, keepdims=True))
+        im_l = axes_l[i].imshow(cm_norm, cmap="Greens", vmin=0, vmax=1)
+        axes_l[i].set_title(f"{name} (Acc: {m['t3_load']['accuracy']*100:.1f}%)")
+        axes_l[i].set_xticks(range(len(LOAD_CLASSES)))
+        axes_l[i].set_yticks(range(len(LOAD_CLASSES)))
+        axes_l[i].set_xticklabels(LOAD_CLASSES, rotation=45, ha="right", fontsize=8)
+        if i == 0:
+            axes_l[i].set_yticklabels(LOAD_CLASSES, fontsize=8)
+            axes_l[i].set_ylabel("True Load")
+        else:
+            axes_l[i].set_yticklabels([])
+        axes_l[i].set_xlabel("Predicted Load")
+
+    fig_l.colorbar(im_l, ax=axes_l, orientation="horizontal", fraction=0.05, pad=0.25, label="Recall Proportion")
+    save_fig(fig_l, "fig_confusion_load", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 9: Location Error Breakdown
+# =========================================================================
+def make_fig_loc_error_breakdowns(fig_dir: Path, rep_dir: Path):
+    brk_path = Path("results/experiments/error_breakdowns.json")
+    if not brk_path.exists():
+        return
+    with open(brk_path, "r") as f:
+        data = json.load(f)
+
+    # 9a: Loc error vs position
+    fig1, ax1 = plt.subplots(figsize=(6, 4))
+    pos_data = data.get("loc_error_vs_position", [])
+    x_pos = [0.5 * (d["bin_start"] + d["bin_end"]) for d in pos_data]
+    y_err = [d["mae_m"] for d in pos_data]
+    ax1.plot(x_pos, y_err, "o-", color="#0072B2", lw=1.8, markersize=6)
+    ax1.set_xlabel("Fault Fractional Position $d/l$")
+    ax1.set_ylabel("Location MAE (m)")
+    ax1.set_title("Localization Error vs. Fault Position Along Cable")
+    save_fig(fig1, "fig_loc_error_vs_position", fig_dir, rep_dir)
+
+    # 9b: Loc error vs gamma
+    fig2, ax2 = plt.subplots(figsize=(6, 4))
+    gamma_data = data.get("loc_error_vs_gamma", [])
+    x_g = [0.5 * (d["gamma_start"] + d["gamma_end"]) for d in gamma_data]
+    y_g = [d["mae_m"] for d in gamma_data]
+    ax2.plot(x_g, y_g, "s-", color="#D55E00", lw=1.8, markersize=6)
+    ax2.set_xlabel(r"Reflection Coefficient Magnitude $|\Gamma_{nominal}|$")
+    ax2.set_ylabel("Location MAE (m)")
+    ax2.set_title(r"Localization Error vs. Discontinuity Strength $|\Gamma|$")
+    save_fig(fig2, "fig_loc_error_vs_gamma", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 10: Noise Sweep (SNR Sensitivity)
+# =========================================================================
+def make_fig_noise_sweep(fig_dir: Path, rep_dir: Path):
+    ns_path = Path("results/experiments/noise_sweep.json")
+    if not ns_path.exists():
+        return
+    with open(ns_path, "r") as f:
+        data = json.load(f)
+
+    snrs = [float(s) for s in data["snrs"]]
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 3.8))
+
+    methods = [("Conventional", "conventional", "gray", "^"), ("LightGBM", "lgbm", "#D55E00", "s"), ("ResNet1D", "resnet", "#0072B2", "o")]
+    for name, key, color, marker in methods:
+        if key not in data:
+            continue
+        f1s = [data[key][str(int(s) if s.is_integer() else s)]["fault_f1"] for s in snrs]
+        maes = [data[key][str(int(s) if s.is_integer() else s)]["loc_mae"] for s in snrs]
+        accs = [data[key][str(int(s) if s.is_integer() else s)]["load_acc"] * 100 for s in snrs]
+
+        ax1.plot(snrs, f1s, label=name, color=color, marker=marker, lw=1.5)
+        ax2.plot(snrs, maes, label=name, color=color, marker=marker, lw=1.5)
+        ax3.plot(snrs, accs, label=name, color=color, marker=marker, lw=1.5)
+
+    ax1.set_xlabel("SNR (dB)")
+    ax1.set_ylabel("Fault Macro-F1")
+    ax1.set_title("(a) Fault Classification F1")
+    ax1.legend(loc="lower right")
+
+    ax2.set_xlabel("SNR (dB)")
+    ax2.set_ylabel("Location MAE (m)")
+    ax2.set_title("(b) Localization Error (m)")
+
+    ax3.set_xlabel("SNR (dB)")
+    ax3.set_ylabel("Load Accuracy (%)")
+    ax3.set_title("(c) Load Classification Accuracy")
+
+    save_fig(fig, "fig_noise_sweep", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 11: OOD Performance
+# =========================================================================
+def make_fig_ood(fig_dir: Path, rep_dir: Path):
+    ood_path = Path("results/experiments/ood_results.json")
+    if not ood_path.exists():
+        return
+    with open(ood_path, "r") as f:
+        data = json.load(f)
+
+    subsets = list(data.keys())
+    x = np.arange(len(subsets))
+    width = 0.25
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+    methods = [("Conventional", "conventional", "gray"), ("LightGBM", "lgbm", "#D55E00"), ("ResNet1D", "resnet", "#0072B2")]
+
+    for i, (name, key, col) in enumerate(methods):
+        f1s = [data[sub][key].get("fault_f1", 0.0) for sub in subsets]
+        maes = [data[sub][key].get("loc_mae", 0.0) for sub in subsets]
+        ax1.bar(x + (i - 1) * width, f1s, width, label=name, color=col, alpha=0.85)
+        ax2.bar(x + (i - 1) * width, maes, width, label=name, color=col, alpha=0.85)
+
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(subsets, rotation=25, ha="right")
+    ax1.set_ylabel("Fault Macro-F1")
+    ax1.set_title("(a) OOD Fault Macro-F1")
+    ax1.legend(loc="lower left")
+
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(subsets, rotation=25, ha="right")
+    ax2.set_ylabel("Location MAE (m)")
+    ax2.set_title("(b) OOD Localization MAE (m)")
+
+    save_fig(fig, "fig_ood", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 12: Learning Curves
+# =========================================================================
+def make_fig_learning_curves(fig_dir: Path, rep_dir: Path):
+    lc_path = Path("results/experiments/learning_curves.json")
+    if not lc_path.exists():
+        return
+    with open(lc_path, "r") as f:
+        data = json.load(f)
+
+    fracs = [float(f) for f in data["fractions"]]
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    if "lgbm" in data and data["lgbm"]:
+        f1_lg = [data["lgbm"][str(f)]["fault_f1"] for f in fracs if str(f) in data["lgbm"]]
+        ax.plot([f for f in fracs if str(f) in data["lgbm"]], f1_lg, "s-", label="LightGBM", color="#D55E00", lw=1.8)
+
+    if "resnet" in data and data["resnet"]:
+        f1_rs = [data["resnet"][str(f)]["fault_f1"] for f in fracs if str(f) in data["resnet"]]
+        ax.plot([f for f in fracs if str(f) in data["resnet"]], f1_rs, "o-", label="ResNet1D", color="#0072B2", lw=1.8)
+
+    ax.set_xlabel("Training Set Fraction")
+    ax.set_ylabel("Validation Fault Macro-F1")
+    ax.set_title("Data Efficiency / Sample Complexity Learning Curve")
+    ax.legend(loc="lower right")
+    save_fig(fig, "fig_learning_curve", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 13: Ablations
+# =========================================================================
+def make_fig_ablations(fig_dir: Path, rep_dir: Path):
+    abl_path = Path("results/experiments/ablations.json")
+    if not abl_path.exists():
+        return
+    with open(abl_path, "r") as f:
+        data = json.load(f)
+
+    labels = []
+    f1s = []
+    maes = []
+    for k, v in data.items():
+        if "t1_fault" in v:
+            labels.append(k.replace("resnet_", ""))
+            f1s.append(v["t1_fault"]["macro_f1"])
+            maes.append(v["t2_loc"]["mae_m"])
+
+    if not labels:
+        return
+
+    fig, ax1 = plt.subplots(figsize=(7, 4))
+    x = np.arange(len(labels))
+    ax1.bar(x, f1s, color="#0072B2", alpha=0.8, width=0.4)
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels, rotation=30, ha="right", fontsize=8.5)
+    ax1.set_ylabel("Fault Macro-F1", color="#0072B2")
+    ax1.set_title("Architectural and Channel Ablation Comparison")
+    save_fig(fig, "fig_ablation", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 14: SHAP Top Features
+# =========================================================================
+def make_fig_shap(fig_dir: Path, rep_dir: Path):
+    shap_path = Path("results/experiments/shap_summary.json")
+    if not shap_path.exists():
+        return
+    with open(shap_path, "r") as f:
+        data = json.load(f)
+
+    importances = np.array(data.get("top_feature_importances", []))
+    indices = data.get("top_feature_indices", [])
+    if len(importances) == 0:
+        return
+    if importances.ndim > 1:
+        importances = np.mean(importances, axis=-1)
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    y = np.arange(len(importances))[::-1]
+    ax.barh(y, importances, color="#009E73", alpha=0.85)
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"Feature #{idx}" for idx in indices], fontsize=8.5)
+    ax.set_xlabel("Mean Absolute SHAP Value (Impact on Fault Prediction)")
+    ax.set_title("Top 20 Features Identified by SHAP (TreeExplainer)")
+    save_fig(fig, "fig_shap", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 15: Training Curves
+# =========================================================================
+def make_fig_training_curves(fig_dir: Path, rep_dir: Path):
+    hist_path = Path("results/runs/resnet_s0/history.csv")
+    if not hist_path.exists():
+        return
+    df_h = pd.read_csv(hist_path)
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(df_h["epoch"], df_h["train_loss"], label="Train Loss", color="#0072B2", lw=1.8)
+    ax.plot(df_h["epoch"], df_h["val_loss"], label="Val Loss", color="#D55E00", lw=1.8, linestyle="--")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Multi-Task Loss")
+    ax.set_title("ResNet1D Training & Validation Loss Trajectory")
+    ax.legend(loc="upper right")
+    save_fig(fig, "fig_training_curves", fig_dir, rep_dir)
+
+
+# =========================================================================
+# Figure 16: Real Data Trace Predictions
+# =========================================================================
+def make_fig_real_data(fig_dir: Path, rep_dir: Path):
+    real_meta_path = Path("data/real/wise_casing/labels.yaml")
+    if not real_meta_path.exists():
+        print("Real data labels not found. Skipping fig_real_data gracefully.")
+        return
+
+    try:
+        from tdr.data import load_real_wise_casing
+        real_data = load_real_wise_casing("data/real/wise_casing")
+        traces = real_data["traces"]
+        meta_df = real_data["meta"]
+        t_grid = np.linspace(0.0, 2.5 * 1023.0 / 1024.0, 1024)
+
+        # Load predictions if available
+        pred_dict = {}
+        eval_json = Path("results/experiments/real_data_eval.json")
+        if eval_json.exists():
+            with open(eval_json, "r") as f:
+                data = json.load(f)
+                for item in data.get("eval_table", []):
+                    pred_dict[item["Trace"]] = item
+
+        # Select 4 key traces for 2x2 layout
+        selected_indices = [0, 1, 2, 4]  # 85m undam, 85m dam (40m), 20m undam, 5m undam
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
+        axes = axes.flatten()
+
+        for plot_idx, trace_idx in enumerate(selected_indices):
+            if trace_idx >= len(traces):
+                continue
+            ax = axes[plot_idx]
+            row = meta_df.iloc[trace_idx]
+            v = traces[trace_idx]
+            fname = row["filename"]
+            l_m = row["cable_length_m"]
+
+            ax.plot(t_grid, v, color="#0072B2", lw=1.5, label="Normalized Real TDR")
+            ax.axvline(0.05, color="#D55E00", linestyle="--", lw=1.2, label="Incident Edge")
+            ax.axvline(1.05, color="#CC79A7", linestyle=":", lw=1.5, label="Load Echo (Round-trip)")
+
+            if pd.notna(row["fault_pos_m"]):
+                f_norm = 0.05 + float(row["fault_pos_m"]) / l_m
+                ax.axvline(f_norm, color="#009E73", linestyle="-.", lw=1.8, label=f"True Damage ({row['fault_pos_m']:.0f}m)")
+
+            preds = pred_dict.get(fname, {})
+            title_str = f"{fname} (l = {l_m:.0f}m)\nTrue: Fault={row['fault_type']}, Load={row['load_type']}"
+            if "ResNet Fault" in preds:
+                title_str += f" | ResNet Pred: {preds['ResNet Fault']}"
+            ax.set_title(title_str, fontsize=10)
+            ax.set_ylabel(r"$\tilde{v} = v / v_{\mathrm{inc}}$")
+            ax.set_ylim(-1.5, 2.5)
+            ax.grid(True, linestyle=":", alpha=0.6)
+            if plot_idx == 0:
+                ax.legend(loc="upper right", fontsize=8)
+
+        axes[2].set_xlabel(r"Normalized Time $t / T_{\mathrm{nom}}$")
+        axes[3].set_xlabel(r"Normalized Time $t / T_{\mathrm{nom}}$")
+        plt.tight_layout()
+        save_fig(fig, "fig_real_data", fig_dir, rep_dir)
+        print("Figure 16 (Real Data) generated successfully!")
+    except Exception as e:
+        print(f"fig_real_data warning: {e}")
+
+
+def make_all_figures():
+    fig_dir = Path("figures")
+    rep_fig_dir = Path("report/figures")
+    results_dir = Path("results")
+    report_dir = Path("report")
+
+    print("\nGenerating all 16 research figures...")
+    make_fig_pipeline(fig_dir, rep_fig_dir)
+    make_fig_sim_validation(fig_dir, rep_fig_dir)
+    make_fig_fault_gallery(fig_dir, rep_fig_dir)
+    make_fig_load_gallery(fig_dir, rep_fig_dir)
+    make_fig_loss_effect(fig_dir, rep_fig_dir)
+    make_fig_noise_examples(fig_dir, rep_fig_dir)
+    make_fig_hard_case(fig_dir, rep_fig_dir)
+    make_fig_confusion_matrices(fig_dir, rep_fig_dir)
+    make_fig_loc_error_breakdowns(fig_dir, rep_fig_dir)
+    make_fig_noise_sweep(fig_dir, rep_fig_dir)
+    make_fig_ood(fig_dir, rep_fig_dir)
+    make_fig_learning_curves(fig_dir, rep_fig_dir)
+    make_fig_ablations(fig_dir, rep_fig_dir)
+    make_fig_shap(fig_dir, rep_fig_dir)
+    make_fig_training_curves(fig_dir, rep_fig_dir)
+    make_fig_real_data(fig_dir, rep_fig_dir)
+
+    # Sync LaTeX tables
+    sync_tables(results_dir, report_dir)
+    print("All available figures generated successfully!")
+
+
+if __name__ == "__main__":
+    make_all_figures()
+

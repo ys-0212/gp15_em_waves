@@ -1,0 +1,11 @@
+{
+  "run_id": "seed0_main",
+  "mode": "quick",
+  "git_hash": "fcc5d4f157ba8522a6acbc4bdb05b027255e6b43",
+  "date": "2026-11-05 21:12:59",
+  "models": [
+    "resnet",
+    "lgbm",
+    "conventional"
+  ]
+}

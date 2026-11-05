@@ -1,0 +1,52 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{microtype}
+
+\graphicspath{{figures/}}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Machine-Learning-Based Transmission Line Fault and Load Identification via Time-Domain Reflectometry}
+
+\author{\IEEEauthorblockN{Shlok Parikh}
+\IEEEauthorblockA{\textit{Department of Electrical Engineering} \\
+\textit{Indian Institute of Technology Indore}\\
+Simrol, Indore 453552, Madhya Pradesh, India \\
+Course: EE 305 Electromagnetic Waves (Theme 4)}
+}
+
+\maketitle
+
+\begin{abstract}
+Time-Domain Reflectometry (TDR) is the benchmark non-destructive diagnostic technique for transmission lines, distributed wiring networks, and coaxial communications infrastructure. Conventional TDR evaluates impedance discontinuities by thresholding voltage reflection peaks, but severely deteriorates when multiple cascaded reflections, frequency-dependent dispersion, dielectric loss, and low signal-to-noise ratios (SNR) distort waveform echoes. This paper investigates machine-learning approaches for simultaneous fault classification, fault localization, and complex load identification from a single TDR trace. We formulate a three-tier diagnostic framework: (T1) 7-class fault identification, (T2) metric fault localization along the line, and (T3) 6-class complex termination identification with parameter regression for resistance ($R_L$), inductance ($L$), and capacitance ($C$). We construct an exact, lossy frequency-domain telegrapher cascade simulator capturing copper skin effect and dielectric loss tangents. Over this physics engine, we benchmark three distinct paradigms: an optimized Conventional rule-based detector with validation-tuned noise margins, a Gradient Boosted Decision Tree (LightGBM) trained on 94 engineered physics features, and a 3-channel Deep 1D Residual Neural Network (1D-ResNet) optimized via physics-masked multi-task loss. We evaluate all methods across SNR sweeps (15 to 60~dB), five rigorous out-of-distribution (OOD) scenarios (long cables, elevated loss, $Z_0$ shifts, degraded generator rise times, and near-load discontinuities), and experimental field measurements from the NREL/LBNL WISE-CASING coaxial cable dataset.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Time-Domain Reflectometry (TDR), Transmission Lines, Telegrapher's Equations, Skin Effect, Deep Learning, 1D-ResNet, LightGBM, Fault Diagnosis, Physics-Informed ML.
+\end{IEEEkeywords}
+
+\input{sections/1_introduction.tex}
+\input{sections/2_theory.tex}
+\input{sections/3_simulation_and_dataset.tex}
+\input{sections/4_methods.tex}
+\input{sections/5_experiments.tex}
+\input{sections/6_results.tex}
+\input{sections/7_discussion_and_conclusion.tex}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
+

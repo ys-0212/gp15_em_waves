@@ -1,0 +1,102 @@
+project: {name: tdr-fault-load-ml}
+paths: {data: data, results: results, figures: figures, checkpoints: checkpoints, weights: app/weights}
+physics:
+  c: 299792458.0
+  z0_nominal: 50.0
+  vf_nominal: 0.66
+  r_dc_ohm_per_m: 0.04
+  k_skin: 1.5e-4          # ohm / (m * sqrt(Hz)) at loss_scale = 1  (~0.13 dB/m at 100 MHz)
+  tan_delta: 2.0e-4
+  open_ohm: 1.0e9
+  short_ohm: 1.0e-6
+signal:
+  n_out: 1024
+  window_T: 2.5
+  t_launch_T: 0.05
+  n_sim: 8192
+  sim_dt_per_T: 1024
+  norm_window_T: [0.09, 0.11]
+  savgol: {window: 11, poly: 2}
+classes:
+  fault: [none, short, open, shunt_R, shunt_C, series_R, z0_section]
+  load: [open, short, matched, R, RL, RC]
+sampling:
+  length_m: [20, 200]
+  z0: [48, 52]
+  vf_rel: [0.98, 1.02]
+  loss_scale: [0.7, 1.3]
+  rise_time_s: [1.0e-9, 5.0e-9]
+  rg: [47.5, 52.5]
+  fault_pos_frac: [0.10, 0.95]
+  shunt_R_ohm: [5, 2000]          # log-uniform
+  shunt_C_F: [2.0e-11, 5.0e-10]   # log-uniform
+  series_R_ohm: [1, 200]          # log-uniform
+  z0_section_ohm: [[35, 45], [55, 70]]
+  z0_section_width_m: [0.5, 3.0]
+  matched_ohm: [49, 51]
+  load_R_ohm: [5, 500]            # log-uniform
+  load_R_reject_ohm: [40, 62]     # only for class R
+  load_tau_over_T: [0.02, 0.3]    # log-uniform
+splits:
+  train: {n: 60000, seed: 1}
+  val: {n: 10000, seed: 2}
+  test: {n: 10000, seed: 3}
+  ood:
+    seed: 4
+    n_per_subset: 1000
+    subsets:
+      long_cable: {length_m: [200, 300]}
+      high_loss: {loss_scale: [1.5, 2.0]}
+      z0_shift: {z0_intervals: [[44, 47], [53, 56]]}
+      slow_rise: {rise_time_s: [5.0e-9, 8.0e-9]}
+      near_load: {fault_to_load_m: [0.3, 3.0], exclude_fault: [none]}
+quick:
+  n: {train: 3000, val: 500, test: 500, ood_per_subset: 100}
+  epochs: 3
+  lgbm_n_estimators: 100
+  seeds: [0]
+  learning_curve_fracs: [0.25, 1.0]
+noise:
+  train_snr_db: [20, 50]
+  eval_snr_db: 30
+  sweep_snr_db: [60, 50, 40, 30, 25, 20, 15]
+  eval_noise_seed: 1234
+conventional:
+  k_sigma_grid: [3, 4, 5, 6]
+  min_sep_samples: 6
+  transient_return_samples: 25
+lgbm:
+  n_estimators: 3000
+  learning_rate: 0.05
+  num_leaves: 63
+  min_child_samples: 20
+  feature_fraction: 0.8
+  bagging_fraction: 0.8
+  bagging_freq: 1
+  early_stopping_rounds: 100
+  noise_copies: 2
+resnet:
+  channels: [v, dv, coord]
+  stem_channels: 32
+  stage_channels: [32, 64, 128, 128]
+  stage_strides: [1, 2, 2, 2]
+  blocks_per_stage: 2
+  kernel: 7
+  embed_dim: 256
+  dropout: 0.2
+train:
+  epochs: 40
+  batch_size: 256
+  lr: 2.0e-3
+  weight_decay: 1.0e-4
+  warmup_epochs: 1
+  patience: 8
+  loss_weights: {fault: 1.0, loc: 10.0, load_cls: 1.0, load_reg: 1.0}
+  huber_delta_loc: 0.02
+  amp: true
+  num_workers: 2
+experiments:
+  seeds: [0, 1, 2]
+  learning_curve_fracs: [0.05, 0.1, 0.25, 0.5, 1.0]
+  shap_samples: 2000
+

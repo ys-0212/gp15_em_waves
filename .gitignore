@@ -1,0 +1,34 @@
+# Python
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+scratch/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.claude/
+
+# Data artifacts (keep real/ and dataset_card.md)
+data/*.h5
+data/*.parquet
+data/real/wise_casing/*.zip
+data/debug/
+results/debug/
+
+# Model checkpoints & outputs
+checkpoints/
+results/runs/**/*.pt
+outputs.zip
+*.log
+
+# Keep empty structure folders and outputs
+!data/real/
+!data/dataset_card.md
+!results/
+!figures/
+!app/weights/
+!report/
+
