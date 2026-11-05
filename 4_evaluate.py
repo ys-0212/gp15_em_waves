@@ -106,8 +106,6 @@ def evaluate_resnet_on_traces(
     load_reg_pred = preds["load_reg_pred"].cpu().numpy()
 
     r_pred = decode_load_r(np.clip(load_reg_pred[:, 0], np.log10(5.0), np.log10(500.0)))
-    r_pred = np.where(np.array(load_cls_pred_id) == LOAD_TO_ID["open"], 1.0e9, r_pred)
-    r_pred = np.where(np.array(load_cls_pred_id) == LOAD_TO_ID["short"], 1.0e-6, r_pred)
     tau_pred = decode_load_tau(np.clip(load_reg_pred[:, 1], -3.0, 0.5))
 
     df_out = meta_df.copy()

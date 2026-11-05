@@ -212,11 +212,7 @@ class ConventionalTDR:
 
         # Estimate R_L
         g_clamped = max(-0.95, min(0.95, gamma_l_hat))
-        r_l_hat = self.z0_nominal * (1.0 + g_clamped) / max(1e-4, (1.0 - g_clamped))
-        if load_class == "open":
-            r_l_hat = 1.0e9
-        elif load_class == "short":
-            r_l_hat = 1.0e-6
+        r_l_hat = float(np.clip(self.z0_nominal * (1.0 + g_clamped) / max(1e-4, (1.0 - g_clamped)), 2.0, 2000.0))
 
         return {
             "fault_class": fault_class,

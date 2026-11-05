@@ -508,8 +508,6 @@ def train_resnet(
     load_cls_pred_id = np.argmax(load_cls_probs, axis=1)
     load_reg_pred = np.concatenate([p["load_reg_pred"] for p in val_preds_list], axis=0)
     pred_r = decode_load_r(np.clip(load_reg_pred[:, 0], np.log10(5.0), np.log10(500.0)))
-    pred_r = np.where(np.array(load_cls_pred_id) == LOAD_TO_ID["open"], 1.0e9, pred_r)
-    pred_r = np.where(np.array(load_cls_pred_id) == LOAD_TO_ID["short"], 1.0e-6, pred_r)
     pred_tau = decode_load_tau(np.clip(load_reg_pred[:, 1], -3.0, 0.5))
 
     val_meta = pd.read_parquet(val_meta_path)

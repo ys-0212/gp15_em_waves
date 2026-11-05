@@ -12,15 +12,15 @@ build/
 .claude/
 
 # Data artifacts (keep real/ and dataset_card.md)
-data/*.h5
-data/*.parquet
+*.h5
+*.parquet
 data/real/wise_casing/*.zip
 data/debug/
 results/debug/
 
 # Model checkpoints & outputs
 checkpoints/
-results/runs/**/*.pt
+results/runs/
 outputs.zip
 *.log
 

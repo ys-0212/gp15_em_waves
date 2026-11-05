@@ -180,9 +180,6 @@ class LGBMSuite:
 
         log_r_pred = self.model_load_r.predict(X)
         r_pred = decode_load_r(np.clip(log_r_pred, np.log10(5.0), np.log10(500.0)))
-        # For predicted open or short, assign exact physical asymptote values
-        r_pred = np.where(load_cls_pred_id == LOAD_TO_ID["open"], 1.0e9, r_pred)
-        r_pred = np.where(load_cls_pred_id == LOAD_TO_ID["short"], 1.0e-6, r_pred)
 
         log_tau_pred = self.model_load_tau.predict(X)
         tau_pred = decode_load_tau(np.clip(log_tau_pred, -3.0, 0.5))

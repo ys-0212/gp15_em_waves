@@ -1,0 +1,136 @@
+{
+  "meta": [
+    {
+      "filename": "TDR_20180315194711u.csv",
+      "cable_length_m": 80.0,
+      "fault_type": "none",
+      "fault_class_id": 0,
+      "fault_pos_m": NaN,
+      "fault_pos_frac": NaN,
+      "load_type": "short",
+      "load_class_id": 1,
+      "description": "TDR response of undamaged 80 m cable with shorted termination",
+      "t_nom_s": 8.086402307833989e-07
+    },
+    {
+      "filename": "TDR_20180315195720u.csv",
+      "cable_length_m": 80.0,
+      "fault_type": "damage (unmapped)",
+      "fault_class_id": 0,
+      "fault_pos_m": 40.0,
+      "fault_pos_frac": 0.5,
+      "load_type": "short",
+      "load_class_id": 1,
+      "description": "TDR response of 80 m cable with physical cutaway damage at 40 m and shorted termination",
+      "t_nom_s": 8.086402307833989e-07
+    },
+    {
+      "filename": "TDR_20180404134819u.csv",
+      "cable_length_m": 20.0,
+      "fault_type": "none",
+      "fault_class_id": 0,
+      "fault_pos_m": NaN,
+      "fault_pos_frac": NaN,
+      "load_type": "short",
+      "load_class_id": 1,
+      "description": "TDR response of undamaged 20 m cable with shorted termination",
+      "t_nom_s": 2.0216005769584972e-07
+    },
+    {
+      "filename": "TDR_20180404135441u.csv",
+      "cable_length_m": 10.0,
+      "fault_type": "none",
+      "fault_class_id": 0,
+      "fault_pos_m": NaN,
+      "fault_pos_frac": NaN,
+      "load_type": "short",
+      "load_class_id": 1,
+      "description": "TDR response of undamaged 10 m cable with shorted termination",
+      "t_nom_s": 1.0108002884792486e-07
+    },
+    {
+      "filename": "TDR_20180404141951u.csv",
+      "cable_length_m": 5.0,
+      "fault_type": "none",
+      "fault_class_id": 0,
+      "fault_pos_m": NaN,
+      "fault_pos_frac": NaN,
+      "load_type": "short",
+      "load_class_id": 1,
+      "description": "TDR response of undamaged 5 m cable with shorted termination",
+      "t_nom_s": 5.054001442396243e-08
+    }
+  ],
+  "eval_table": [
+    {
+      "Trace": "TDR_20180315194711u.csv",
+      "Cable (m)": "80",
+      "True Fault": "none",
+      "True Loc (m)": "None",
+      "True Load": "short",
+      "Conv Fault": "series_R",
+      "Conv Load": "RL",
+      "LGBM Fault": "open",
+      "LGBM Load": "RL",
+      "ResNet Fault": "none",
+      "ResNet Load": "open",
+      "ResNet Loc (m)": "80.0"
+    },
+    {
+      "Trace": "TDR_20180315195720u.csv",
+      "Cable (m)": "80",
+      "True Fault": "damage (unmapped)",
+      "True Loc (m)": "40.0",
+      "True Load": "short",
+      "Conv Fault": "short",
+      "Conv Load": "short",
+      "LGBM Fault": "short",
+      "LGBM Load": "short",
+      "ResNet Fault": "open",
+      "ResNet Load": "matched",
+      "ResNet Loc (m)": "75.9"
+    },
+    {
+      "Trace": "TDR_20180404134819u.csv",
+      "Cable (m)": "20",
+      "True Fault": "none",
+      "True Loc (m)": "None",
+      "True Load": "short",
+      "Conv Fault": "none",
+      "Conv Load": "short",
+      "LGBM Fault": "shunt_R",
+      "LGBM Load": "matched",
+      "ResNet Fault": "short",
+      "ResNet Load": "short",
+      "ResNet Loc (m)": "12.3"
+    },
+    {
+      "Trace": "TDR_20180404135441u.csv",
+      "Cable (m)": "10",
+      "True Fault": "none",
+      "True Loc (m)": "None",
+      "True Load": "short",
+      "Conv Fault": "none",
+      "Conv Load": "short",
+      "LGBM Fault": "series_R",
+      "LGBM Load": "RC",
+      "ResNet Fault": "series_R",
+      "ResNet Load": "RC",
+      "ResNet Loc (m)": "3.2"
+    },
+    {
+      "Trace": "TDR_20180404141951u.csv",
+      "Cable (m)": "5",
+      "True Fault": "none",
+      "True Loc (m)": "None",
+      "True Load": "short",
+      "Conv Fault": "none",
+      "Conv Load": "R",
+      "LGBM Fault": "shunt_R",
+      "LGBM Load": "open",
+      "ResNet Fault": "z0_section",
+      "ResNet Load": "open",
+      "ResNet Loc (m)": "5.0"
+    }
+  ]
+}

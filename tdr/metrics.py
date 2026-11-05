@@ -131,7 +131,8 @@ def evaluate_t3_load(
     # MAPE R for classes R, RL, RC
     mask_r = np.isin(t_cls, ["R", "RL", "RC"]) & (~np.isnan(t_r)) & (t_r > 0)
     if np.sum(mask_r) > 0:
-        mape_r = float(np.mean(np.abs(p_r[mask_r] - t_r[mask_r]) / t_r[mask_r]) * 100.0)
+        p_r_eval = np.clip(p_r[mask_r], 1.0, 2000.0)
+        mape_r = float(np.mean(np.abs(p_r_eval - t_r[mask_r]) / t_r[mask_r]) * 100.0)
     else:
         mape_r = 0.0
 

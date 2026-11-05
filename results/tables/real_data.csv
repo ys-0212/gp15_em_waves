@@ -1,0 +1,6 @@
+Trace,Cable (m),True Fault,True Loc (m),True Load,Conv Fault,Conv Load,LGBM Fault,LGBM Load,ResNet Fault,ResNet Load,ResNet Loc (m)
+TDR_20180315194711u.csv,80,none,None,short,series_R,RL,open,RL,none,open,80.0
+TDR_20180315195720u.csv,80,damage (unmapped),40.0,short,short,short,short,short,open,matched,75.9
+TDR_20180404134819u.csv,20,none,None,short,none,short,shunt_R,matched,short,short,12.3
+TDR_20180404135441u.csv,10,none,None,short,none,short,series_R,RC,series_R,RC,3.2
+TDR_20180404141951u.csv,5,none,None,short,none,R,shunt_R,open,z0_section,open,5.0

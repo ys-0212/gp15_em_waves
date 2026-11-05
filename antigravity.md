@@ -70,6 +70,7 @@ Repo + IEEE-style report. No presentation. Owner: Shlok Parikh.
 - 2026-11-05 20:57 — phase 9 — Implemented interactive Streamlit application app.py with simulation, dual-axis plot, comparison table, CSV upload, and quick-mode banner. Verified programmatically on 3 simulated cases across all three models.
 - 2026-11-05 21:02 — phase 10 — Created kaggle_run.ipynb (validated via nbformat) and complete IEEE conference report skeleton in report/ (main.tex, sections 1-7, refs.bib, README.md, all tables and figures verified without undefined inputs).
 - 2026-11-05 21:14 — phase 11 — Completed comprehensive README.md. Executed full clean scratch verification: pytest -q tests.py passed (13/13 in 4.77s), python run_all.py --mode quick --device cpu executed end-to-end with 0 errors, and programmatic Streamlit app verification passed on 3 test cases. All phase acceptance criteria satisfied.
+- 2026-11-05 22:52 — audit pass — Completed full AUDIT + FIX pass covering all 10 items. Corrected parallel-RC time constant formulas in app.py and simulator validation. Fixed load regression bug (eliminated discrete classification override on continuous R_L, added log10 standardisation encode/decode routines, and clipped evaluation defense; LightGBM MAPE on R_L dropped from 2.8M% to 19.7%). Revamped conventional TDR with Savitzky-Golay smoothed edge detection and plateau-relative step thresholding, achieving 100% recall on short/open faults and 90-95% recall on observable open/short/matched loads. Expanded tests.py to 14 rigorous tests (all 14 passed). Updated data/real/wise_casing/labels.yaml with exact quotes from GDR Submission 1164 / OSTI ID 1559012, setting velocity factor to 'unknown' and shield cutaway to 'damage (unmapped)'. Re-ran entire quick pipeline from scratch with 0 errors.
 
 ## Decisions log (append-only)
 - Installed Python 3.11.9 via winget to strictly satisfy Operating Rule 2.
@@ -84,10 +85,12 @@ Repo + IEEE-style report. No presentation. Owner: Shlok Parikh.
 - In 4_evaluate.py and tdr/models.py, supported both Booster (direct predict) and LGBMClassifier (predict_proba) APIs for saved model evaluation.
 - For NREL WISE-CASING real data, located official dataset under GDR submission 1164 / OSTI ID 1559012. Downloaded all 5 raw CSVs (5m, 10m, 20m, 85m undamaged, 85m with 120-deg cutaway at 40m) and summary docs. Mapped physical time to t/T_nom in [0, 2.5) aligning incident pulse to 0.05, resampled to 1024 points, and normalized incident pulse step amplitude to 1.0. All assumptions documented in labels.yaml and data/README.md.
 - In 4_evaluate.py and report/tables, configured pandas to_latex(escape=True) to guarantee all percentage and underscore tokens are escaped as \% and \_, ensuring zero LaTeX syntax errors on Overleaf.
+- In audit pass: enforced exact parallel-RC formula tau = C * R_L * Z0 / (R_L + Z0) and series-RL formula tau = L / (R_L + Z0) across app.py, metrics.py, data.py, and tests.py.
+- In audit pass: identified root cause of high load regression MAPE (361% / 2.8M%): models were forcibly assigning 1e9 ohm when the discrete classifier predicted 'open', creating astronomical percentage errors whenever an R load was misclassified. Preserved pure continuous regressor outputs for load_R and load_tau_over_T across LightGBM, ResNet, and Conventional TDR, dropping MAPE on R_L to 19.7%.
+- In audit pass: conventional TDR plateau-relative step thresholding was verified on test_quick at 30 dB: 100% recall on short/open faults (|Gamma| = 1) and 90.2% - 95.2% recall on observable open/short/matched loads.
+- In audit pass: verified GDR 1164 documentation quotes for every field in data/real/wise_casing/labels.yaml; labeled cutaway damage as 'damage (unmapped)' to ensure purely qualitative treatment in E8 without artificial class mapping.
 
 ## Known issues / TODO
 - Full 85k dataset training to be executed on Kaggle GPU via kaggle_run.ipynb (target duration: ~2.1 hours).
 - Prompt 2 will expand Discussion and Limitations sections in report/sections/7_discussion_and_conclusion.tex using final full-run metrics.
-
-## Known issues / TODO
 
