@@ -1,8 +1,15 @@
 \section{Diagnostic Methodologies}
 \label{sec:methods}
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{fig_pipeline.pdf}
+\caption{End-to-End TDR Diagnostic Pipeline: from exact frequency-domain transmission line cascade simulation to 3-channel standardized preprocessing, feature engineering, and multi-model inference across Conventional, LightGBM, and Multi-Task ResNet1D architectures.}
+\label{fig:pipeline}
+\end{figure*}
+
 \subsection{Unified Preprocessing Pipeline}
-To ensure rigorous benchmarking, all models consume identical preprocessed inputs derived from a single canonical function. A raw trace $v(0, t)$ is normalized against the incident plateau step $v_{\mathrm{inc}}$:
+Fig.~\ref{fig:pipeline} shows the complete pipeline. All three methods consume the same preprocessed inputs, produced by a single function. A raw trace $v(0, t)$ is normalized against the incident plateau step $v_{\mathrm{inc}}$:
 \begin{equation}
 \tilde{v}(t) = \frac{v(0, t)}{v_{\mathrm{inc}}}
 \label{eq:v_norm}

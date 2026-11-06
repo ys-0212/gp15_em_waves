@@ -1,6 +1,6 @@
-OOD Subset,Conventional F1,Conventional MAE (m),Conventional Load Acc,Lgbm F1,Lgbm MAE (m),Lgbm Load Acc,Resnet F1,Resnet MAE (m),Resnet Load Acc
-long_cable,0.4697,24.98,73.1%,0.4789,28.74,73.1%,0.5231,51.30,55.2%
-high_loss,0.5186,12.20,76.5%,0.6372,11.32,83.8%,0.4568,21.50,63.2%
-z0_shift,0.6131,10.28,76.7%,0.7138,9.98,87.7%,0.5502,21.68,72.6%
-slow_rise,0.6235,9.10,81.8%,0.7524,10.88,89.6%,0.5538,24.35,68.8%
-near_load,0.0699,49.36,68.9%,0.2277,39.03,78.4%,0.2390,43.73,62.2%
+OOD subset,Conventional F1,Conventional MAE (m),Conventional load acc (%),LightGBM F1,LightGBM MAE (m),LightGBM load acc (%),ResNet F1,ResNet MAE (m),ResNet load acc (%)
+long_cable,0.469,27.85,79.7,0.574,24.58,85.5,0.682,22.19,94.0
+high_loss,0.532,11.27,73.5,0.710,9.64,83.3,0.814,7.75,91.6
+z0_shift,0.616,9.91,76.4,0.761,8.39,91.9,0.840,6.15,95.5
+slow_rise,0.609,9.60,79.8,0.753,7.72,93.6,0.847,6.09,97.3
+near_load,0.058,53.21,72.5,0.232,42.05,82.0,0.278,40.21,82.6

@@ -1,8 +1,8 @@
 {
   "run_id": "seed0_main",
-  "mode": "quick",
-  "git_hash": "cd2a1cd0d6da2696bf4b0dea1ed195ef0f63c7a8",
-  "date": "2026-11-06 11:38:18",
+  "mode": "full",
+  "git_hash": "172031e6e4c900c91b35298cfdf0319f8978bbba",
+  "date": "2026-11-06 10:53:10",
   "models": [
     "resnet",
     "lgbm",

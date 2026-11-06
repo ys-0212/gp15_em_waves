@@ -1,13 +1,13 @@
 {
   "params": {
     "k_sigma": 3.0,
-    "c_step": 1.0,
+    "c_step": 1.5,
     "min_step": 0.02,
-    "a_short": 0.45,
+    "a_short": 0.4,
     "b_open": 1.55,
     "return_ratio": 0.5,
     "rho_bipolar": 0.8,
-    "g_matched": 0.12,
+    "g_matched": 0.1,
     "s_transient": 0.05,
     "r_open": 500.0,
     "r_short": 8.0

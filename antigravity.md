@@ -29,7 +29,7 @@ Repo + IEEE-style report. No presentation. Owner: Shlok Parikh.
 - `2_generate_data.py`: CLI data generator for synthetic TDR splits.
 - `3_train.py`: Unified model training script (LightGBM and ResNet1D).
 - `4_evaluate.py`: Evaluation suite covering E1–E8 experiments.
-- `5_make_figures.py`: Publication-grade figure generator (all 16 figures).
+- `5_make_figures.py`: Publication-grade figure generator (all 18 figures).
 - `run_all.py`: Master pipeline runner with stage selection and skip-existing support.
 - `app.py`: Interactive Streamlit application for interactive simulation and real trace analysis.
 - `tests.py`: Comprehensive test suite (13 physics, pipeline, and metric tests).
@@ -101,9 +101,13 @@ Repo + IEEE-style report. No presentation. Owner: Shlok Parikh.
 - 2026-11-06: conventional thresholds are re-tuned on the validation split of every run (quick or full); DEFAULT_CONV_PARAMS hold the quick-run values only as defaults for tests and the app fallback.
 - 2026-11-06: run folders' metrics.json hold VALIDATION metrics (training scripts); all reported test numbers come from 4_evaluate.py (results/tables, results/experiments/test_metrics_s0.json).
 
+- 2026-11-06 (after the full Kaggle run, 135 min on a T4): shap_summary.json from the run was wrong. shap 0.54 returns one [N, F, C] array for multiclass, and the old code sorted per feature over classes. Fixed with mean_abs_shap_per_feature() plus named features (tdr.features.FEATURE_NAMES). SHAP recomputed from the full-run LightGBM model on the regenerated test split (accuracy check on 2,000 traces: 77.7% vs 78.2% for the full split).
+- 2026-11-06: report tables cleaned up. Single-task ablation rows show "--" for untrained tasks, plus an "epochs run (best)" column. The recall table is rounded, with a compact wide version (recall_vs_gamma_wide). Noise and OOD tables use LightGBM/ResNet names. All were regenerated from the full-run JSONs.
+- 2026-11-06: figures fixed. Raw strings remove the SyntaxWarnings and the broken "\tau" labels. The ablation figure now has 3 panels showing only trained tasks, the SHAP figure shows feature names, training curves show all seeds with the saved checkpoint marked, and the OOD legend no longer covers the bars.
+- 2026-11-06: early stopping (patience 8) ended 2 of the 12 ResNet runs early (seed 2 at epoch 20; ch_vdv ablation at 15) because the validation loss is noisy. All other runs had their best epoch at 38-40. This is documented in the report. Optional fix: set train.patience >= epochs and rerun on Kaggle.
+- 2026-11-06: report Results/Discussion/Limitations/Conclusion/Abstract written from the full-run numbers. Dataset ranges in Section III corrected to config.yaml. refs.bib entries verified via Crossref (novel2025wiring authors filled; ieee2024cs_tdr corrected to the AUTOTESTCON 2024 paper; Scarpetta author list fixed; Smail 2011 added). The report compiles with IEEEtran (0 errors, 0 undefined references, 16 pages).
+
 ## Known issues / TODO
-- Full 85k dataset training to be executed on Kaggle GPU via kaggle_run.ipynb (target duration: ~2.1 hours).
-- Prompt 2 will expand Discussion and Limitations sections in report/sections/7_discussion_and_conclusion.tex using final full-run metrics.
-- Full-run time on Kaggle not yet measured with the new on-device training; results/timings.json will record it. Estimate: data generation ~2 min, LightGBM (7 runs, cached features) ~30-60 min, ResNet (12 runs) ~1-1.5 h on a T4, evaluation + figures ~10 min.
-- report/refs.bib entry novel2025wiring (Neural Computing and Applications 2025, doi:10.1007/s00521-025-11406-z) still has "Authors TODO"; fill from the publisher page before submission.
+- Optional: rerun with early stopping disabled (train.patience: 40) for cleaner seed statistics and (v, dv) ablation.
 - Conventional method is weak on z0_section and shunt_C (short sections / capacitive dips are smeared by loss and rise time); documented in recall_vs_gamma table.
+- No ML model can be tested on real step-TDR data yet (WISE-CASING is pulse-type).

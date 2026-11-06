@@ -489,6 +489,20 @@ def extract_features_single(preprocessed_trace: np.ndarray) -> np.ndarray:
     return np.array(feats, dtype=np.float32)
 
 
+def _feature_names() -> list:
+    """Human-readable names, in the exact order produced by extract_features_single()."""
+    names = [f"v_bin{b:02d} (t/T={b * 2.5 / 64:.2f}-{(b + 1) * 2.5 / 64:.2f})" for b in range(64)]
+    names += ["v_final", "v_min", "v_max", "t_argmin", "t_argmax", "v_mean[0.11,1.0]", "v_mean[1.0,2.5]"]
+    for i in range(1, 5):
+        names += [f"edge{i}_time", f"edge{i}_dv_height", f"edge{i}_step", f"edge{i}_width"]
+    names += ["first_edge_gamma", "first_edge_Z/Z0", "level[0.90,0.97]", "load_overshoot",
+              "load_undershoot", "load_tau_fit", "noise_sigma"]
+    return names
+
+
+FEATURE_NAMES = _feature_names()
+
+
 def _extract_chunk(chunk: np.ndarray) -> np.ndarray:
     return np.stack([extract_features_single(chunk[i]) for i in range(len(chunk))]).astype(np.float32)
 

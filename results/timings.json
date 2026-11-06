@@ -2,83 +2,128 @@
   "commands": [
     {
       "stage": "gen",
-      "cmd": "2_generate_data.py --quick",
-      "seconds": 12.11
-    },
-    {
-      "stage": "validate",
-      "cmd": "1_validate_simulator.py",
-      "seconds": 4.32
+      "cmd": "2_generate_data.py",
+      "seconds": 171.47
     },
     {
       "stage": "conventional",
-      "cmd": "3_train.py --model conventional --quick",
-      "seconds": 26.02
+      "cmd": "3_train.py --model conventional",
+      "seconds": 225.76
     },
     {
       "stage": "lgbm",
-      "cmd": "3_train.py --model lgbm --seed 0 --quick",
-      "seconds": 43.78
+      "cmd": "3_train.py --model lgbm --seed 0",
+      "seconds": 1001.41
     },
     {
       "stage": "lgbm",
-      "cmd": "3_train.py --model lgbm --seed 0 --train-frac 0.25 --quick",
-      "seconds": 15.95
+      "cmd": "3_train.py --model lgbm --seed 1",
+      "seconds": 934.5
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 2",
+      "seconds": 954.93
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 0 --train-frac 0.05",
+      "seconds": 77.07
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 0 --train-frac 0.1",
+      "seconds": 115.75
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 0 --train-frac 0.25",
+      "seconds": 249.97
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 0 --train-frac 0.5",
+      "seconds": 468.89
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --device cpu --quick",
-      "seconds": 54.97
+      "cmd": "3_train.py --model resnet --seed 0 --device cuda",
+      "seconds": 388.7
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --train-frac 0.25 --device cpu --quick",
-      "seconds": 20.99
+      "cmd": "3_train.py --model resnet --seed 1 --device cuda",
+      "seconds": 386.6
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --channels v --device cpu --quick",
-      "seconds": 52.23
+      "cmd": "3_train.py --model resnet --seed 2 --device cuda",
+      "seconds": 199.06
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --channels v,dv --device cpu --quick",
-      "seconds": 50.88
+      "cmd": "3_train.py --model resnet --seed 0 --train-frac 0.05 --device cuda",
+      "seconds": 47.49
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --single-task fault --device cpu --quick",
-      "seconds": 50.49
+      "cmd": "3_train.py --model resnet --seed 0 --train-frac 0.1 --device cuda",
+      "seconds": 64.98
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --single-task loc --device cpu --quick",
-      "seconds": 50.96
+      "cmd": "3_train.py --model resnet --seed 0 --train-frac 0.25 --device cuda",
+      "seconds": 118.42
     },
     {
       "stage": "resnet",
-      "cmd": "3_train.py --model resnet --seed 0 --single-task load --device cpu --quick",
-      "seconds": 51.67
+      "cmd": "3_train.py --model resnet --seed 0 --train-frac 0.5 --device cuda",
+      "seconds": 207.88
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --channels v --device cuda",
+      "seconds": 388.14
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --channels v,dv --device cuda",
+      "seconds": 153.67
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --single-task fault --device cuda",
+      "seconds": 368.97
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --single-task loc --device cuda",
+      "seconds": 374.81
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --single-task load --device cuda",
+      "seconds": 381.52
     },
     {
       "stage": "evaluate",
-      "cmd": "4_evaluate.py --device cpu --quick",
-      "seconds": 45.0
+      "cmd": "4_evaluate.py --device cuda",
+      "seconds": 820.37
     },
     {
       "stage": "figures",
       "cmd": "5_make_figures.py",
-      "seconds": 16.65
+      "seconds": 23.4
     }
   ],
   "stages": {
-    "gen": 12.11,
-    "validate": 4.32,
-    "conventional": 26.02,
-    "lgbm": 59.73,
-    "resnet": 332.19,
-    "evaluate": 45.0,
-    "figures": 16.65
+    "gen": 171.47,
+    "validate": 0.0,
+    "conventional": 225.76,
+    "lgbm": 3802.52,
+    "resnet": 3080.24,
+    "evaluate": 820.37,
+    "figures": 23.4
   },
-  "total_elapsed_s": 496.1319053173065
+  "total_elapsed_s": 8123.8622052669525
 }

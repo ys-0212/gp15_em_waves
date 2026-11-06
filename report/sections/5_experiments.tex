@@ -10,7 +10,7 @@ Diagnostic performance across the three tasks is measured using the following st
         \item Macro-Averaged $F_1$ Score: unweighted mean across all 7 classes, penalizing poor performance on minority fault categories.
         \item 7 $\times$ 7 Confusion Matrices.
     \end{itemize}
-    \item \textbf{Task 2 (Fault Localization):} Computed strictly over all samples where the ground-truth fault is present ($y_{\mathrm{fault}} \ne \text{\texttt{none}}$):
+    \item \textbf{Task 2 (Fault Localization):} computed over all samples whose true class is not \texttt{none}, whatever class was predicted, so a missed fault still counts with the location the method outputs (the conventional detector outputs $d/l = 0.5$ when it finds no edge):
     \begin{itemize}
         \item Mean Absolute Error in metres: $\mathrm{MAE} = \frac{1}{N_{\mathrm{fault}}} \sum_{i=1}^{N_{\mathrm{fault}}} |\hat{d}_i - d_i|$.
         \item Median Absolute Error in metres: robust to extreme outliers.
@@ -29,17 +29,17 @@ Diagnostic performance across the three tasks is measured using the following st
 \subsection{Experimental Suite (E1--E8)}
 Our experimental protocol comprises eight systematic investigations:
 \begin{itemize}
-    \item \textbf{E1: Benchmark Comparison:} Comprehensive evaluation of Conventional TDR, LightGBM, and 1D-ResNet on the held-out test split under standard operating conditions ($\mathrm{SNR} = 30$~dB).
-    \item \textbf{E2: Noise Sweep:} Evaluation across seven SNR levels: $\{60, 50, 40, 30, 25, 20, 15\}$~dB, quantifying graceful degradation against severe additive interference.
-    \item \textbf{E3: Out-of-Distribution Generalization:} Testing robustness on the five OOD partitions: long cables ($l \le 400$~m), high loss ($s_{\mathrm{loss}} \le 4.0$), structural impedance shifts ($Z_0 \ne 50\ \Omega$), sluggish rise times ($t_r \le 10$~ns), and near-load discontinuities ($l - d \le 3$~m).
-    \item \textbf{E4: Error Stratification:} Fine-grained breakdown of localization MAE as a function of relative distance along the line ($d/l$) and discontinuity reflection strength ($|\Gamma|$).
-    \item \textbf{E5: Sample Efficiency \& Learning Curves:} Benchmarking performance scaling with training set fractions $\{0.05, 0.10, 0.25, 0.50, 1.0\}$.
-    \item \textbf{E6: Ablation Studies:} Dissecting model components:
+    \item \textbf{E1: Benchmark Comparison:} Conventional TDR, LightGBM and 1D-ResNet on the held-out test split at 30~dB, with one fixed noise realisation (seed 1234). The ML models are trained with three seeds and reported as mean $\pm$ standard deviation.
+    \item \textbf{E2: Noise Sweep:} the test split at seven SNR levels $\{60, 50, 40, 30, 25, 20, 15\}$~dB with the seed-0 models and one fixed noise realisation per level. 15 and 60~dB lie outside the 20--50~dB training range.
+    \item \textbf{E3: Out-of-Distribution Generalization:} the five OOD subsets of Section~\ref{sec:simulation} (long cable 200--300~m, loss $\times 1.5$--$2$, $Z_0$ shifted to 44--47 or 53--56~$\Omega$, rise time 5--8~ns, fault 0.3--3~m from the load), at 30~dB, with the seed-0 models.
+    \item \textbf{E4: Error Stratification:} location MAE of the seed-0 ResNet as a function of relative position $d/l$ and of the nominal reflection strength $|\Gamma|$ of the fault, and the detection recall (predicted class $\ne$ \texttt{none}) of every method per $|\Gamma|$ bin for the resistive and $Z_0$-section faults.
+    \item \textbf{E5: Sample Efficiency \& Learning Curves:} LightGBM and ResNet (seed 0) trained on fractions $\{0.05, 0.10, 0.25, 0.50, 1.0\}$ of the training split and scored on the \emph{validation} split.
+    \item \textbf{E6: Ablation Studies} (seed 0, scored on the \emph{validation} split):
     \begin{enumerate}
         \item Input representation: 3-channel $(\tilde{v}, d\tilde{v}/dt, t/T)$ vs. 2-channel $(\tilde{v}, d\tilde{v}/dt)$ vs. single-channel $(\tilde{v})$.
         \item Multi-task synergy: Joint multi-task learning vs. three independent single-task networks dedicated to T1, T2, and T3.
     \end{enumerate}
-    \item \textbf{E7: Explainability via SHAP Analysis:} Global and local feature attributions using TreeExplainer \cite{lundberg2017unified} to interpret decision boundaries in the LightGBM models.
+    \item \textbf{E7: Explainability via SHAP Analysis:} mean absolute SHAP values (TreeExplainer \cite{lundberg2017unified}) of the seed-0 LightGBM fault classifier on 2,000 test traces at 30~dB, averaged over the seven classes.
     \item \textbf{E8: Physical Consistency on Laboratory TDR Data:} on the WISE-CASING pulse-TDR records \cite{nrel_wise_casing}, measure round-trip echo times, estimate the velocity factor from the undamaged 80~m cable, locate the 40~m cutaway by echo-time ratio, and flag records whose echo times contradict their documented length.
 \end{itemize}
 

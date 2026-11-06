@@ -1,8 +1,8 @@
-| Configuration                |   Fault Macro-F1 |   Loc MAE (m) |   Load Acc (%) |
-|:-----------------------------|-----------------:|--------------:|---------------:|
-| Full ResNet1D (v, dv, coord) |           0.6014 |         20.97 |          65.56 |
-| No Coord Channel (v, dv)     |           0.6173 |         18.55 |          76.58 |
-| Voltage Only (v)             |           0.5889 |         20.38 |          57.3  |
-| Single-Task: Fault           |           0.5765 |         33.64 |          31.13 |
-| Single-Task: Location        |           0.0449 |         18.97 |          31.4  |
-| Single-Task: Load            |           0.0791 |         36.19 |          73.28 |
+| Configuration                | Fault macro-F1   | Loc MAE (m)   | Load acc (%)   | Epochs run (best)   |
+|:-----------------------------|:-----------------|:--------------|:---------------|:--------------------|
+| Full ResNet1D (v, dv, coord) | 0.8578           | 5.71          | 97.22          | 40 (39)             |
+| No coord channel (v, dv)     | 0.8369           | 7.65          | 95.67          | 15 (7)              |
+| Voltage only (v)             | 0.8544           | 5.76          | 97.05          | 40 (39)             |
+| Single-task: fault           | 0.8536           | --            | --             | 40 (40)             |
+| Single-task: location        | --               | 4.48          | --             | 40 (40)             |
+| Single-task: load            | --               | --            | 97.02          | 40 (38)             |

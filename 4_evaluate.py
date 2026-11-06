@@ -26,11 +26,124 @@ from tdr.data import (
     decode_load_r,
     decode_load_tau,
 )
-from tdr.features import ConventionalTDR, extract_features, cached_features
+from tdr.features import ConventionalTDR, extract_features, cached_features, FEATURE_NAMES
 
 FEATURE_CACHE_DIR = Path("data") / "cache"
+
 from tdr.models import LGBMSuite, ResNet1D
 from tdr.metrics import compute_all_metrics
+
+
+def mean_abs_shap_per_feature(shap_vals, n_features: int) -> np.ndarray:
+    """Mean |SHAP| per feature for a multiclass model, whatever layout shap returns.
+
+    Older shap: list of [N, F] arrays (one per class). Newer shap: one [N, F, C] array.
+    """
+    if isinstance(shap_vals, list):
+        arr = np.stack([np.abs(np.asarray(sv)) for sv in shap_vals], axis=-1)  # [N, F, C]
+    else:
+        arr = np.abs(np.asarray(shap_vals))
+    if arr.ndim == 2:                       # [N, F]
+        return arr.mean(axis=0)
+    f_axis = [ax for ax in range(1, arr.ndim) if arr.shape[ax] == n_features][0]
+    other = tuple(ax for ax in range(arr.ndim) if ax != f_axis)
+    return arr.mean(axis=other)
+
+
+def recall_table(recall_rows: list) -> pd.DataFrame:
+    """Detection recall vs |Gamma| bin, rounded for the report."""
+    df = pd.DataFrame(recall_rows)
+    return pd.DataFrame({
+        "Method": df["method"],
+        "Fault class": df["fault_class"],
+        "abs(Gamma) bin": df["gamma_bin"],
+        "n": df["n"].astype(int),
+        "Detected (%)": df["detected_pct"].map(lambda v: f"{v:.1f}"),
+        "Correct class (%)": df["correct_pct"].map(lambda v: f"{v:.1f}"),
+    })
+
+
+def recall_table_wide(recall_rows: list) -> pd.DataFrame:
+    """Compact version for the report: one row per (class, |Gamma| bin), 'detected / correct' per method."""
+    df = pd.DataFrame(recall_rows)
+    short = {"Conventional TDR": "Conventional", "LightGBM": "LightGBM", "Multi-Task ResNet1D": "ResNet1D"}
+    df["cell"] = df["detected_pct"].map(lambda v: f"{v:.0f}") + " / " + df["correct_pct"].map(lambda v: f"{v:.0f}")
+    df["method"] = df["method"].map(lambda m: short.get(m, m))
+    wide = df.pivot_table(index=["fault_class", "gamma_bin", "n"], columns="method", values="cell", aggfunc="first", sort=False)
+    wide = wide.reset_index().rename(columns={"fault_class": "Fault class", "gamma_bin": "abs(Gamma) bin"})
+    cols = ["Fault class", "abs(Gamma) bin", "n"] + [c for c in ["Conventional", "LightGBM", "ResNet1D"] if c in wide.columns]
+    return wide[cols]
+
+
+def learning_curve_table(e5_dict: dict, fracs: list) -> pd.DataFrame:
+    rows = []
+    for f_val in fracs:
+        row = {"Train fraction": f"{float(f_val):g}"}
+        for key, name in [("lgbm", "LightGBM"), ("resnet", "ResNet")]:
+            m = e5_dict.get(key, {}).get(str(f_val))
+            if m:
+                row[f"{name} F1"] = f"{m['fault_f1']:.4f}"
+                row[f"{name} MAE (m)"] = f"{m['loc_mae']:.2f}"
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+METHOD_NAMES = {"conventional": "Conventional", "lgbm": "LightGBM", "resnet": "ResNet"}
+
+
+def per_method_table(d: dict, keys: list, first_col: str, by_method_first: bool) -> pd.DataFrame:
+    """Rows = SNR levels or OOD subsets; columns = F1 / MAE / load accuracy for each method.
+
+    by_method_first=True: d[method][str(key)]  (noise sweep layout)
+    by_method_first=False: d[key][method]      (OOD layout)
+    """
+    rows = []
+    for key in keys:
+        row = {first_col: key if isinstance(key, str) else f"{key:g}"}
+        for mod, name in METHOD_NAMES.items():
+            m = d.get(mod, {}).get(str(key)) if by_method_first else d.get(key, {}).get(mod)
+            if not m:
+                continue
+            row[f"{name} F1"] = f"{m['fault_f1']:.3f}"
+            row[f"{name} MAE (m)"] = f"{m['loc_mae']:.2f}"
+            acc = m["load_acc"]
+            row[f"{name} load acc (%)"] = f"{(acc * 100 if acc <= 1.0 else acc):.1f}"
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+ABLATION_RUNS = [
+    ("Full ResNet1D (v, dv, coord)", "resnet_s0", ("t1", "t2", "t3")),
+    ("No coord channel (v, dv)", "resnet_ch_vdv_s0", ("t1", "t2", "t3")),
+    ("Voltage only (v)", "resnet_ch_v_s0", ("t1", "t2", "t3")),
+    ("Single-task: fault", "resnet_single_fault_s0", ("t1",)),
+    ("Single-task: location", "resnet_single_loc_s0", ("t2",)),
+    ("Single-task: load", "resnet_single_load_s0", ("t3",)),
+]
+
+
+def ablation_table(e6_dict: dict, runs_dir: Path = None) -> pd.DataFrame:
+    """One row per ablation run; tasks a single-task run was not trained on are shown as '--'."""
+    rows = []
+    for label, r_id, tasks in ABLATION_RUNS:
+        m = e6_dict.get(r_id)
+        if not m:
+            continue
+        acc = m["t3_load"]["accuracy"]
+        row = {
+            "Configuration": label,
+            "Fault macro-F1": f"{m['t1_fault']['macro_f1']:.4f}" if "t1" in tasks else "--",
+            "Loc MAE (m)": f"{m['t2_loc']['mae_m']:.2f}" if "t2" in tasks else "--",
+            "Load acc (%)": f"{(acc * 100 if acc <= 1.0 else acc):.2f}" if "t3" in tasks else "--",
+        }
+        epochs = ""
+        if runs_dir is not None and (runs_dir / r_id / "history.csv").exists():
+            h = pd.read_csv(runs_dir / r_id / "history.csv")
+            epochs = f"{len(h)} ({int(h['epoch'][h['val_loss'].idxmin()])})"
+        row["Epochs run (best)"] = epochs
+        rows.append(row)
+    return pd.DataFrame(rows)
+
 
 
 def get_git_hash() -> str:
@@ -444,17 +557,7 @@ def run_all_evaluations(
     with open(exp_dir / "noise_sweep.json", "w", encoding="utf-8") as f:
         json.dump(e2_dict, f, indent=2)
 
-    # Export noise sweep table
-    e2_rows = []
-    for snr in snrs:
-        row = {"SNR (dB)": snr}
-        for mod in ["conventional", "lgbm", "resnet"]:
-            if str(snr) in e2_dict[mod]:
-                row[f"{mod.capitalize()} F1"] = f"{e2_dict[mod][str(snr)]['fault_f1']:.4f}"
-                row[f"{mod.capitalize()} MAE (m)"] = f"{e2_dict[mod][str(snr)]['loc_mae']:.2f}"
-                row[f"{mod.capitalize()} Load Acc"] = f"{e2_dict[mod][str(snr)]['load_acc']*100:.1f}%"
-        e2_rows.append(row)
-    export_table(pd.DataFrame(e2_rows), tables_dir / "noise_sweep")
+    export_table(per_method_table(e2_dict, snrs, "SNR (dB)", by_method_first=True), tables_dir / "noise_sweep")
 
     # =====================================================================
     # E3: OOD Generalization Subsets
@@ -507,16 +610,7 @@ def run_all_evaluations(
     with open(exp_dir / "ood_results.json", "w", encoding="utf-8") as f:
         json.dump(e3_dict, f, indent=2)
 
-    e3_rows = []
-    for subset in ood_subsets:
-        row = {"OOD Subset": subset}
-        for mod in ["conventional", "lgbm", "resnet"]:
-            if mod in e3_dict[subset] and e3_dict[subset][mod]:
-                row[f"{mod.capitalize()} F1"] = f"{e3_dict[subset][mod]['fault_f1']:.4f}"
-                row[f"{mod.capitalize()} MAE (m)"] = f"{e3_dict[subset][mod]['loc_mae']:.2f}"
-                row[f"{mod.capitalize()} Load Acc"] = f"{e3_dict[subset][mod]['load_acc']*100:.1f}%"
-        e3_rows.append(row)
-    export_table(pd.DataFrame(e3_rows), tables_dir / "ood_metrics")
+    export_table(per_method_table(e3_dict, ood_subsets, "OOD subset", by_method_first=False), tables_dir / "ood_metrics")
 
     # =====================================================================
     # E4: Error Breakdowns on Test at 30 dB
@@ -594,14 +688,14 @@ def run_all_evaluations(
                     "correct_pct": float(np.mean(pred == cls) * 100.0),
                 })
     if recall_rows:
-        export_table(pd.DataFrame(recall_rows), tables_dir / "recall_vs_gamma")
+        export_table(recall_table(recall_rows), tables_dir / "recall_vs_gamma")
+        export_table(recall_table_wide(recall_rows), tables_dir / "recall_vs_gamma_wide")
 
     # =====================================================================
     # E5: Learning Curves
     # =====================================================================
     print("\n[E5] Aggregating Learning Curves...")
     fracs = cfg["quick"]["learning_curve_fracs"] if quick else cfg["experiments"]["learning_curve_fracs"]
-    e5_records = []
     e5_dict = {"fractions": fracs, "lgbm": {}, "resnet": {}}
 
     for f_val in fracs:
@@ -631,59 +725,24 @@ def run_all_evaluations(
     with open(exp_dir / "learning_curves.json", "w", encoding="utf-8") as f:
         json.dump(e5_dict, f, indent=2)
 
-    for f_val in fracs:
-        row = {"Train Fraction": f_val}
-        if str(f_val) in e5_dict["lgbm"]:
-            row["LGBM F1"] = f"{e5_dict['lgbm'][str(f_val)]['fault_f1']:.4f}"
-            row["LGBM MAE (m)"] = f"{e5_dict['lgbm'][str(f_val)]['loc_mae']:.2f}"
-        if str(f_val) in e5_dict["resnet"]:
-            row["ResNet F1"] = f"{e5_dict['resnet'][str(f_val)]['fault_f1']:.4f}"
-            row["ResNet MAE (m)"] = f"{e5_dict['resnet'][str(f_val)]['loc_mae']:.2f}"
-        e5_records.append(row)
-    export_table(pd.DataFrame(e5_records), tables_dir / "learning_curve")
+    export_table(learning_curve_table(e5_dict, fracs), tables_dir / "learning_curve")
 
     # =====================================================================
     # E6: Ablation Studies
     # =====================================================================
     print("\n[E6] Aggregating Ablation Studies...")
-    ablation_runs = [
-        ("Full ResNet1D (v, dv, coord)", "resnet_s0"),
-        ("No Coord Channel (v, dv)", "resnet_ch_vdv_s0"),
-        ("Voltage Only (v)", "resnet_ch_v_s0"),
-        ("Single-Task: Fault", "resnet_single_fault_s0"),
-        ("Single-Task: Location", "resnet_single_loc_s0"),
-        ("Single-Task: Load", "resnet_single_load_s0"),
-    ]
-    e6_rows = []
     e6_dict = {}
-
-    for label, r_id in ablation_runs:
+    for label, r_id, _tasks in ABLATION_RUNS:
         m_path = runs_dir / r_id / "metrics.json"
         if m_path.exists():
             with open(m_path, "r", encoding="utf-8") as f_m:
-                m_data = json.load(f_m)
-            e6_dict[r_id] = m_data
-            e6_rows.append({
-                "Configuration": label,
-                "Fault Macro-F1": f"{m_data['t1_fault']['macro_f1']:.4f}",
-                "Loc MAE (m)": f"{m_data['t2_loc']['mae_m']:.2f}",
-                "Load Acc (%)": f"{m_data['t3_load']['accuracy']*100:.2f}",
-            })
-        elif r_id == "resnet_s0" and 0 in resnet_models:
-            # Main model baseline
-            e6_dict[r_id] = resnet_metric_list[0] if resnet_metric_list else {}
-            if resnet_metric_list:
-                m_data = resnet_metric_list[0]
-                e6_rows.append({
-                    "Configuration": label,
-                    "Fault Macro-F1": f"{m_data['t1_fault']['macro_f1']:.4f}",
-                    "Loc MAE (m)": f"{m_data['t2_loc']['mae_m']:.2f}",
-                    "Load Acc (%)": f"{m_data['t3_load']['accuracy']*100:.2f}",
-                })
+                e6_dict[r_id] = json.load(f_m)
+        elif r_id == "resnet_s0" and resnet_metric_list:
+            e6_dict[r_id] = resnet_metric_list[0]
 
     with open(exp_dir / "ablations.json", "w", encoding="utf-8") as f:
         json.dump(e6_dict, f, indent=2)
-    export_table(pd.DataFrame(e6_rows), tables_dir / "ablations")
+    export_table(ablation_table(e6_dict, runs_dir), tables_dir / "ablations")
 
     # =====================================================================
     # E7: SHAP Feature Importance (TreeExplainer)
@@ -696,17 +755,14 @@ def run_all_evaluations(
             X_shap = extract_features(preproc_shap)
 
             explainer = shap.TreeExplainer(lgbm_suites[0].model_fault)
-            shap_vals = explainer.shap_values(X_shap)
-            # Compute mean absolute SHAP value per feature across classes
-            if isinstance(shap_vals, list):
-                # Multiclass: list of [N, F]
-                mean_abs_shap = np.mean([np.mean(np.abs(sv), axis=0) for sv in shap_vals], axis=0)
-            else:
-                mean_abs_shap = np.mean(np.abs(shap_vals), axis=0)
-
+            mean_abs_shap = mean_abs_shap_per_feature(explainer.shap_values(X_shap), X_shap.shape[1])
+            order = np.argsort(mean_abs_shap)[::-1][:20]
             shap_summary = {
-                "top_feature_indices": np.argsort(mean_abs_shap)[::-1][:20].tolist(),
-                "top_feature_importances": np.sort(mean_abs_shap)[::-1][:20].tolist(),
+                "n_samples": int(n_shap),
+                "aggregation": "mean |SHAP| over samples, averaged over the 7 fault classes",
+                "top_feature_indices": [int(i) for i in order],
+                "top_feature_names": [FEATURE_NAMES[i] if i < len(FEATURE_NAMES) else f"f{i}" for i in order],
+                "top_feature_importances": [float(mean_abs_shap[i]) for i in order],
             }
             with open(exp_dir / "shap_summary.json", "w", encoding="utf-8") as f:
                 json.dump(shap_summary, f, indent=2)

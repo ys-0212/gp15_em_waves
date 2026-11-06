@@ -1,38 +1,38 @@
 # Dataset Card: TDR Transmission Line Fault & Load Identification
 
 ## Summary
-- **Generation Timestamp**: 2026-11-06 11:30:28
-- **Total Generation Time**: 4.52 seconds
-- **Mode**: Quick Mode
+- **Generation Timestamp**: 2026-11-06 08:40:59
+- **Total Generation Time**: 164.95 seconds
+- **Mode**: Full Mode
 
 ## Split Sizes and Generation Speed
 | Split | Samples | Generation Time (s) | Time per 1k samples (s) |
 |---|---|---|---|
-| `train_quick` | 3,000 | 3.03 | 1.01 |
-| `val_quick` | 500 | 0.49 | 0.99 |
-| `test_quick` | 500 | 0.50 | 0.99 |
-| `ood_quick` | 500 | 0.45 | 0.89 |
+| `train` | 60,000 | 116.50 | 1.94 |
+| `val` | 10,000 | 19.43 | 1.94 |
+| `test` | 10,000 | 19.28 | 1.93 |
+| `ood` | 5,000 | 8.92 | 1.78 |
 
 ## Fault Class Distribution Across Splits
 | Fault Class | Train | Val | Test | OOD |
 |---|---|---|---|---|
-| `none` | 442 | 72 | 73 | 50 |
-| `short` | 423 | 82 | 66 | 65 |
-| `open` | 441 | 55 | 76 | 76 |
-| `shunt_R` | 399 | 79 | 74 | 79 |
-| `shunt_C` | 436 | 68 | 68 | 82 |
-| `series_R` | 413 | 67 | 82 | 65 |
-| `z0_section` | 446 | 77 | 61 | 83 |
+| `none` | 8,622 | 1,455 | 1,413 | 521 |
+| `short` | 8,497 | 1,451 | 1,408 | 746 |
+| `open` | 8,602 | 1,363 | 1,413 | 748 |
+| `shunt_R` | 8,469 | 1,424 | 1,435 | 735 |
+| `shunt_C` | 8,507 | 1,477 | 1,434 | 782 |
+| `series_R` | 8,794 | 1,416 | 1,416 | 757 |
+| `z0_section` | 8,509 | 1,414 | 1,481 | 711 |
 
 ## Load Class Distribution Across Splits
 | Load Class | Train | Val | Test | OOD |
 |---|---|---|---|---|
-| `open` | 497 | 83 | 89 | 98 |
-| `short` | 493 | 79 | 91 | 75 |
-| `matched` | 499 | 89 | 71 | 80 |
-| `R` | 496 | 71 | 81 | 82 |
-| `RL` | 517 | 86 | 87 | 84 |
-| `RC` | 498 | 92 | 81 | 81 |
+| `open` | 9,910 | 1,644 | 1,671 | 841 |
+| `short` | 9,971 | 1,672 | 1,678 | 826 |
+| `matched` | 9,903 | 1,596 | 1,663 | 827 |
+| `R` | 10,024 | 1,672 | 1,662 | 885 |
+| `RL` | 10,166 | 1,737 | 1,645 | 832 |
+| `RC` | 10,026 | 1,679 | 1,681 | 789 |
 
 ## Parameter Ranges
 - **Cable Length**: 20 m – 200 m (OOD long_cable: 200 m – 300 m)

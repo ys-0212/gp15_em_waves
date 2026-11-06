@@ -1,6 +1,7 @@
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
 
+\usepackage[T1]{fontenc}
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
@@ -10,6 +11,7 @@
 \usepackage{booktabs}
 \usepackage{url}
 \usepackage{microtype}
+\usepackage[section]{placeins} % keep floats inside their own section
 
 \graphicspath{{figures/}}
 
@@ -30,11 +32,11 @@ Course: EE 305 Electromagnetic Waves (Theme 4)}
 \maketitle
 
 \begin{abstract}
-Time-Domain Reflectometry (TDR) is the benchmark non-destructive diagnostic technique for transmission lines, distributed wiring networks, and coaxial communications infrastructure. Conventional TDR evaluates impedance discontinuities by thresholding voltage reflection peaks, but severely deteriorates when multiple cascaded reflections, frequency-dependent dispersion, dielectric loss, and low signal-to-noise ratios (SNR) distort waveform echoes. This paper investigates machine-learning approaches for simultaneous fault classification, fault localization, and complex load identification from a single TDR trace. We formulate a three-tier diagnostic framework: (T1) 7-class fault identification, (T2) metric fault localization along the line, and (T3) 6-class complex termination identification with parameter regression for resistance ($R_L$), inductance ($L$), and capacitance ($C$). We construct an exact, lossy frequency-domain telegrapher cascade simulator capturing copper skin effect and dielectric loss tangents. Over this physics engine, we benchmark three distinct paradigms: an optimized Conventional rule-based detector with validation-tuned noise margins, a Gradient Boosted Decision Tree (LightGBM) trained on 94 engineered physics features, and a 3-channel Deep 1D Residual Neural Network (1D-ResNet) optimized via physics-masked multi-task loss. We evaluate all methods across SNR sweeps (15 to 60~dB), five rigorous out-of-distribution (OOD) scenarios (long cables, elevated loss, $Z_0$ shifts, degraded generator rise times, and near-load discontinuities), and we verify the echo-timing physics (velocity factor and damage location) on public laboratory TDR records of a damaged 80~m coaxial cable (WISE-CASING). % TODO (Prompt 2): add one sentence with the headline quantitative results.
+Time-domain reflectometry (TDR) locates faults on a cable from the echoes of a launched step, but threshold-based analysis struggles with weak reflections, lossy and dispersive lines, and noise. We study whether machine learning can recover more from a single step-TDR trace, on three tasks: classify the fault (7 classes), locate it, and identify the termination (6 classes, with $R_L$, $L$ or $C$). Training data come from a frequency-domain lossy-line simulator with skin effect and dielectric loss, validated against bounce-diagram and transient theory. We compare a conventional rule-based detector, LightGBM on 94 engineered features, and a multi-task 1-D ResNet. On 10,000 held-out traces at 30~dB SNR, the ResNet reaches a fault macro-$F_1$ of $0.848 \pm 0.007$ (LightGBM 0.790, conventional 0.622), a location error of 6.1~m mean and 1.6~m median, and a load accuracy of 96.3\% (93.4\% and 80.2\%). The learned models detect resistive faults with $|\Gamma|$ down to about 0.05, whereas the threshold detector needs 0.1--0.2. They remain ahead from 60 to 15~dB and under shifts in line impedance, rise time, loss and cable length, but every method fails when the fault lies within 3~m of the load. On public laboratory records of an 80~m coaxial cable, echo timing locates a shield cutaway within 1.5~m of its documented position.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Time-Domain Reflectometry (TDR), Transmission Lines, Telegrapher's Equations, Skin Effect, Deep Learning, 1D-ResNet, LightGBM, Fault Diagnosis, Physics-Informed ML.
+Time-domain reflectometry, transmission lines, telegrapher's equations, skin effect, fault location, load identification, LightGBM, 1-D ResNet.
 \end{IEEEkeywords}
 
 \input{sections/1_introduction.tex}

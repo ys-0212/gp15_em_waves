@@ -1,4 +1,4 @@
-"""Publication-quality figure generator for all 16 research figures.
+"""Publication-quality figure generator for all 18 research figures.
 
 Adheres strictly to style rules:
 - Consistent colorblind-safe palettes
@@ -8,6 +8,7 @@ Adheres strictly to style rules:
 """
 
 import json
+import warnings
 from pathlib import Path
 import shutil
 import h5py
@@ -57,7 +58,9 @@ def save_fig(fig: plt.Figure, base_name: str, fig_dir: Path, report_fig_dir: Pat
     png_path = fig_dir / f"{base_name}.png"
     pdf_path = fig_dir / f"{base_name}.pdf"
 
-    fig.tight_layout()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # gridspec + colorbar axes are not tight_layout-compatible
+        fig.tight_layout()
     fig.savefig(png_path, dpi=300, bbox_inches="tight")
     fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
     shutil.copy2(pdf_path, report_fig_dir / f"{base_name}.pdf")
@@ -136,7 +139,7 @@ def make_fig_sim_validation(fig_dir: Path, rep_dir: Path):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
     # Panel 1: Bounce diagram
-    loads = [("open", 1e9, "Open", "#D55E00"), ("short", 1e-6, "Short", "#0072B2"), ("150", 150.0, "150 $\Omega$", "#009E73")]
+    loads = [("open", 1e9, "Open", "#D55E00"), ("short", 1e-6, "Short", "#0072B2"), ("150", 150.0, r"150 $\Omega$", "#009E73")]
     for name, rl, label, color in loads:
         p = LineParams(length_m=100.0, z0=50.0, vf=0.66, rg=25.0, v0=1.0, load_class="R" if name not in ("open", "short") else name, load_r=rl, rise_time_s=1.0e-9)
         t_norm, v_sim = simulate_trace(p, lossless=True)
@@ -151,7 +154,7 @@ def make_fig_sim_validation(fig_dir: Path, rep_dir: Path):
     ax1.set_xlim(0, 2.5)
     ax1.set_xlabel("Normalized Time $t / T_{nom}$")
     ax1.set_ylabel("Input Voltage $V(0,t)$ (V)")
-    ax1.set_title("(a) Lossless Bounce Diagram ($R_g=25\ \Omega, Z_0=50\ \Omega$)")
+    ax1.set_title(r"(a) Lossless Bounce Diagram ($R_g=25\ \Omega, Z_0=50\ \Omega$)")
     ax1.legend(loc="upper right", fontsize=8)
 
     # Panel 2: Reactive tails
@@ -171,7 +174,7 @@ def make_fig_sim_validation(fig_dir: Path, rep_dir: Path):
     ax2.set_xlim(0.8, 2.0)
     ax2.set_xlabel("Normalized Time $t / T_{nom}$")
     ax2.set_ylabel("Voltage $V(0,t)$ (V)")
-    ax2.set_title("(b) Lossless Reactive Load Tails ($R_g=Z_0=50\ \Omega$)")
+    ax2.set_title(r"(b) Lossless Reactive Load Tails ($R_g=Z_0=50\ \Omega$)")
     ax2.legend(loc="upper right", fontsize=8)
 
     save_fig(fig, "fig_sim_validation", fig_dir, rep_dir)
@@ -184,11 +187,11 @@ def make_fig_fault_gallery(fig_dir: Path, rep_dir: Path):
     fault_configs = [
         ("none", 0.0, 0.0, "No Fault"),
         ("short", 0.0, 0.0, "Short ($Z_f=0$)"),
-        ("open", 0.0, 0.0, "Open ($Z_f=\infty$)"),
-        ("shunt_R", 25.0, 0.0, "Shunt R ($R_f=25\ \Omega$)"),
+        ("open", 0.0, 0.0, r"Open ($Z_f=\infty$)"),
+        ("shunt_R", 25.0, 0.0, r"Shunt R ($R_f=25\ \Omega$)"),
         ("shunt_C", 150e-12, 0.0, "Shunt C ($C_f=150$ pF)"),
-        ("series_R", 20.0, 0.0, "Series R ($R_f=20\ \Omega$)"),
-        ("z0_section", 65.0, 3.0, "Impedance Discontinuity ($Z_0'=65\ \Omega$)"),
+        ("series_R", 20.0, 0.0, r"Series R ($R_f=20\ \Omega$)"),
+        ("z0_section", 65.0, 3.0, r"Impedance Discontinuity ($Z_0'=65\ \Omega$)"),
     ]
     fig, axes = plt.subplots(len(fault_configs), 1, figsize=(8, 11), sharex=True)
 
@@ -210,12 +213,12 @@ def make_fig_fault_gallery(fig_dir: Path, rep_dir: Path):
 # =========================================================================
 def make_fig_load_gallery(fig_dir: Path, rep_dir: Path):
     load_configs = [
-        ("matched", 50.0, 0.0, "Matched Load ($R_L=50\ \Omega$)"),
-        ("open", 1e9, 0.0, "Open Load ($R_L=\infty$)"),
+        ("matched", 50.0, 0.0, r"Matched Load ($R_L=50\ \Omega$)"),
+        ("open", 1e9, 0.0, r"Open Load ($R_L=\infty$)"),
         ("short", 1e-6, 0.0, "Short Load ($R_L=0$)"),
-        ("R", 150.0, 0.0, "Resistive Mismatch ($R_L=150\ \Omega$)"),
-        ("RL", 75.0, 0.10, "Series RL ($\tau=0.1 T_{nom}$)"),
-        ("RC", 75.0, 0.10, "Parallel RC ($\tau=0.1 T_{nom}$)"),
+        ("R", 150.0, 0.0, r"Resistive Mismatch ($R_L=150\ \Omega$)"),
+        ("RL", 75.0, 0.10, r"Series RL ($\tau=0.1 T_{nom}$)"),
+        ("RC", 75.0, 0.10, r"Parallel RC ($\tau=0.1 T_{nom}$)"),
     ]
     fig, axes = plt.subplots(len(load_configs), 1, figsize=(8, 10), sharex=True)
 
@@ -288,7 +291,7 @@ def make_fig_hard_case(fig_dir: Path, rep_dir: Path):
     v_noisy = preproc[0, 0]
 
     ax.plot(t_norm, v_nofault / 0.5, label="No Fault (Pure RC Load)", color="gray", linestyle="--", lw=1.5)
-    ax.plot(t_norm, v_clean / 0.5, label="Weak Shunt-R Clean ($d/l=0.90, R_f=350\ \Omega$)", color="navy", lw=1.5)
+    ax.plot(t_norm, v_clean / 0.5, label=r"Weak Shunt-R Clean ($d/l=0.90, R_f=350\ \Omega$)", color="navy", lw=1.5)
     ax.plot(t_norm, v_noisy, label="Weak Shunt-R Noisy (25 dB SNR)", color="crimson", alpha=0.65, lw=1.2)
 
     ax.set_xlim(0.85, 1.45)
@@ -361,7 +364,7 @@ def make_fig_loc_error_breakdowns(fig_dir: Path, rep_dir: Path):
     ax1.plot(x_pos, y_err, "o-", color="#0072B2", lw=1.8, markersize=6)
     ax1.set_xlabel("Fault Fractional Position $d/l$")
     ax1.set_ylabel("Location MAE (m)")
-    ax1.set_title("Localization Error vs. Fault Position Along Cable")
+    ax1.set_title("ResNet1D location error vs. fault position (test, 30 dB)")
     save_fig(fig1, "fig_loc_error_vs_position", fig_dir, rep_dir)
 
     # 9b: Loc error vs gamma
@@ -372,7 +375,7 @@ def make_fig_loc_error_breakdowns(fig_dir: Path, rep_dir: Path):
     ax2.plot(x_g, y_g, "s-", color="#D55E00", lw=1.8, markersize=6)
     ax2.set_xlabel(r"Reflection Coefficient Magnitude $|\Gamma_{nominal}|$")
     ax2.set_ylabel("Location MAE (m)")
-    ax2.set_title(r"Localization Error vs. Discontinuity Strength $|\Gamma|$")
+    ax2.set_title(r"ResNet1D location error vs. $|\Gamma|$ of the fault (test, 30 dB)")
     save_fig(fig2, "fig_loc_error_vs_gamma", fig_dir, rep_dir)
 
 
@@ -444,7 +447,7 @@ def make_fig_ood(fig_dir: Path, rep_dir: Path):
     ax1.set_xticklabels(subsets, rotation=25, ha="right")
     ax1.set_ylabel("Fault Macro-F1")
     ax1.set_title("(a) OOD Fault Macro-F1")
-    ax1.legend(loc="lower left")
+    ax1.legend(loc="upper center", bbox_to_anchor=(1.1, -0.28), ncol=3, frameon=False)
 
     ax2.set_xticks(x)
     ax2.set_xticklabels(subsets, rotation=25, ha="right")
@@ -486,31 +489,39 @@ def make_fig_learning_curves(fig_dir: Path, rep_dir: Path):
 # Figure 13: Ablations
 # =========================================================================
 def make_fig_ablations(fig_dir: Path, rep_dir: Path):
+    """Validation-set ablations: each panel shows only the runs that train that task."""
     abl_path = Path("results/experiments/ablations.json")
     if not abl_path.exists():
         return
     with open(abl_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    labels = []
-    f1s = []
-    maes = []
-    for k, v in data.items():
-        if "t1_fault" in v:
-            labels.append(k.replace("resnet_", ""))
-            f1s.append(v["t1_fault"]["macro_f1"])
-            maes.append(v["t2_loc"]["mae_m"])
-
-    if not labels:
-        return
-
-    fig, ax1 = plt.subplots(figsize=(7, 4))
-    x = np.arange(len(labels))
-    ax1.bar(x, f1s, color="#0072B2", alpha=0.8, width=0.4)
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(labels, rotation=30, ha="right", fontsize=8.5)
-    ax1.set_ylabel("Fault Macro-F1", color="#0072B2")
-    ax1.set_title("Architectural and Channel Ablation Comparison")
+    nice = {"resnet_s0": "Full\n(v, dv, coord)", "resnet_ch_vdv_s0": "No coord\n(v, dv)",
+            "resnet_ch_v_s0": "Voltage only\n(v)", "resnet_single_fault_s0": "Single-task",
+            "resnet_single_loc_s0": "Single-task", "resnet_single_load_s0": "Single-task"}
+    shared = ["resnet_s0", "resnet_ch_vdv_s0", "resnet_ch_v_s0"]
+    panels = [
+        ("(a) Fault macro-F1", shared + ["resnet_single_fault_s0"], lambda v: v["t1_fault"]["macro_f1"], "{:.3f}"),
+        ("(b) Location MAE (m)", shared + ["resnet_single_loc_s0"], lambda v: v["t2_loc"]["mae_m"], "{:.2f}"),
+        ("(c) Load accuracy (%)", shared + ["resnet_single_load_s0"],
+         lambda v: 100.0 * v["t3_load"]["accuracy"] if v["t3_load"]["accuracy"] <= 1.0 else v["t3_load"]["accuracy"], "{:.1f}"),
+    ]
+    colors = ["#0072B2", "#56B4E9", "#009E73", "#E69F00"]
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3.8))
+    for ax, (title, keys, getter, fmt) in zip(axes, panels):
+        keys = [k for k in keys if k in data]
+        vals = [getter(data[k]) for k in keys]
+        bars = ax.bar(np.arange(len(keys)), vals, color=colors[:len(keys)], alpha=0.9, width=0.6)
+        for bar, v in zip(bars, vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), fmt.format(v),
+                    ha="center", va="bottom", fontsize=8)
+        ax.set_xticks(np.arange(len(keys)))
+        ax.set_xticklabels([nice.get(k, k) for k in keys], fontsize=8)
+        ax.set_title(title)
+        lo, hi = min(vals), max(vals)
+        pad = 0.25 * (hi - lo + 1e-9)
+        ax.set_ylim(max(0.0, lo - 3 * pad), hi + 2 * pad)
+    fig.suptitle("ResNet1D ablations (validation split, 30 dB, seed 0)", fontsize=11)
     save_fig(fig, "fig_ablation", fig_dir, rep_dir)
 
 
@@ -524,20 +535,20 @@ def make_fig_shap(fig_dir: Path, rep_dir: Path):
     with open(shap_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    importances = np.array(data.get("top_feature_importances", []))
-    indices = data.get("top_feature_indices", [])
-    if len(importances) == 0:
+    importances = np.asarray(data.get("top_feature_importances", []), dtype=float)
+    names = data.get("top_feature_names")
+    if importances.ndim != 1 or len(importances) == 0 or not names:
+        print("  shap_summary.json is in an old format (re-run 4_evaluate.py); skipping fig_shap")
         return
-    if importances.ndim > 1:
-        importances = np.mean(importances, axis=-1)
 
     fig, ax = plt.subplots(figsize=(7, 6))
     y = np.arange(len(importances))[::-1]
     ax.barh(y, importances, color="#009E73", alpha=0.85)
     ax.set_yticks(y)
-    ax.set_yticklabels([f"Feature #{idx}" for idx in indices], fontsize=8.5)
-    ax.set_xlabel("Mean Absolute SHAP Value (Impact on Fault Prediction)")
-    ax.set_title("Top 20 Features Identified by SHAP (TreeExplainer)")
+    ax.set_yticklabels(names, fontsize=8.5)
+    ax.set_xlabel(r"Mean $|$SHAP$|$ (averaged over the 7 fault classes)")
+    ax.set_title(f"LightGBM fault model: top {len(names)} features "
+                 f"(test, 30 dB, n={data.get('n_samples', '?')})", fontsize=11)
     save_fig(fig, "fig_shap", fig_dir, rep_dir)
 
 
@@ -545,18 +556,22 @@ def make_fig_shap(fig_dir: Path, rep_dir: Path):
 # Figure 15: Training Curves
 # =========================================================================
 def make_fig_training_curves(fig_dir: Path, rep_dir: Path):
-    hist_path = Path("results/runs/resnet_s0/history.csv")
-    if not hist_path.exists():
+    runs = sorted(Path("results/runs").glob("resnet_s[0-9]*/history.csv"))
+    if not runs:
         return
-    df_h = pd.read_csv(hist_path)
-
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.plot(df_h["epoch"], df_h["train_loss"], label="Train Loss", color="#0072B2", lw=1.8)
-    ax.plot(df_h["epoch"], df_h["val_loss"], label="Val Loss", color="#D55E00", lw=1.8, linestyle="--")
+    for i, hp in enumerate(runs):
+        df_h = pd.read_csv(hp)
+        seed = hp.parent.name.split("_s")[-1]
+        col = CB_COLORS[i % len(CB_COLORS)]
+        ax.plot(df_h["epoch"], df_h["train_loss"], color=col, lw=1.6, label=f"seed {seed} train")
+        ax.plot(df_h["epoch"], df_h["val_loss"], color=col, lw=1.4, linestyle="--", label=f"seed {seed} val")
+        best = df_h["val_loss"].idxmin()
+        ax.plot(df_h["epoch"][best], df_h["val_loss"][best], marker="*", color=col, markersize=10)
     ax.set_xlabel("Epoch")
-    ax.set_ylabel("Multi-Task Loss")
-    ax.set_title("ResNet1D Training & Validation Loss Trajectory")
-    ax.legend(loc="upper right")
+    ax.set_ylabel("Multi-task loss")
+    ax.set_title("ResNet1D training and validation loss (star = saved checkpoint)")
+    ax.legend(loc="upper right", ncol=2, fontsize=8)
     save_fig(fig, "fig_training_curves", fig_dir, rep_dir)
 
 
@@ -601,7 +616,7 @@ def make_fig_real_data(fig_dir: Path, rep_dir: Path):
         if vf_est:
             fig.suptitle(f"WISE-CASING pulse-TDR records (velocity factor estimated from 80 m reference: {vf_est:.3f})", fontsize=10)
         save_fig(fig, "fig_real_data", fig_dir, rep_dir)
-        print("Figure 16 (Real Data) generated successfully!")
+        print("Real-data figure generated.")
     except Exception as e:
         print(f"fig_real_data warning: {e}")
 
@@ -612,7 +627,7 @@ def make_all_figures():
     results_dir = Path("results")
     report_dir = Path("report")
 
-    print("\nGenerating all 16 research figures...")
+    print("\nGenerating all 18 research figures...")
     make_fig_pipeline(fig_dir, rep_fig_dir)
     make_fig_sim_validation(fig_dir, rep_fig_dir)
     make_fig_fault_gallery(fig_dir, rep_fig_dir)
