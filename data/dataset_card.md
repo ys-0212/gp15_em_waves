@@ -1,17 +1,17 @@
 # Dataset Card: TDR Transmission Line Fault & Load Identification
 
 ## Summary
-- **Generation Timestamp**: 2026-11-05 22:27:33
-- **Total Generation Time**: 19.29 seconds
+- **Generation Timestamp**: 2026-11-06 11:30:28
+- **Total Generation Time**: 4.52 seconds
 - **Mode**: Quick Mode
 
 ## Split Sizes and Generation Speed
 | Split | Samples | Generation Time (s) | Time per 1k samples (s) |
 |---|---|---|---|
-| `train_quick` | 3,000 | 13.05 | 4.35 |
-| `val_quick` | 500 | 1.68 | 3.37 |
-| `test_quick` | 500 | 2.11 | 4.21 |
-| `ood_quick` | 500 | 2.23 | 4.46 |
+| `train_quick` | 3,000 | 3.03 | 1.01 |
+| `val_quick` | 500 | 0.49 | 0.99 |
+| `test_quick` | 500 | 0.50 | 0.99 |
+| `ood_quick` | 500 | 0.45 | 0.89 |
 
 ## Fault Class Distribution Across Splits
 | Fault Class | Train | Val | Test | OOD |

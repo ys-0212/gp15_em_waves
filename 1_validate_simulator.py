@@ -20,7 +20,7 @@ from tdr.simulator import (
 
 def run_validation(config_path: Path = Path("config.yaml"), out_path: Path = Path("results/sim_validation.json")):
     """Run analytic validation checks and export numeric comparisons to JSON."""
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     results = {}
@@ -147,7 +147,7 @@ def run_validation(config_path: Path = Path("config.yaml"), out_path: Path = Pat
     results["fault_reflections"] = fault_results
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     print(f"\nValidation metrics saved to {out_path}")
 

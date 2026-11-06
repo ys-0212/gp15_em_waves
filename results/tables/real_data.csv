@@ -1,6 +1,6 @@
-Trace,Cable (m),True Fault,True Loc (m),True Load,Conv Fault,Conv Load,LGBM Fault,LGBM Load,ResNet Fault,ResNet Load,ResNet Loc (m)
-TDR_20180315194711u.csv,80,none,None,short,series_R,RL,open,RL,none,open,80.0
-TDR_20180315195720u.csv,80,damage (unmapped),40.0,short,short,short,short,short,open,matched,75.9
-TDR_20180404134819u.csv,20,none,None,short,none,short,shunt_R,matched,short,short,12.3
-TDR_20180404135441u.csv,10,none,None,short,none,short,series_R,RC,series_R,RC,3.2
-TDR_20180404141951u.csv,5,none,None,short,none,R,shunt_R,open,z0_section,open,5.0
+File,Documented setup,Doc. length (m),Round trip (us),Echo polarity,Implied vf,Distance at vf_est (m),Consistent
+TDR_20180315194711u.csv,TDR Shorted Termination Pre-Damage,80,0.836,negative,0.638,80.0,yes
+TDR_20180315195720u.csv,TDR Shorted Termination with 120 Degree Cutaway,80,0.402,positive,1.328,38.5,n/a (damage echo)
+TDR_20180404134819u.csv,TDR 20m Coaxial Cable Lab Experiment ,20,0.842,negative,0.158,80.6,NO
+TDR_20180404135441u.csv,TDR 10m Coaxial Cable Lab Experiment,10,0.402,negative,0.166,38.5,NO
+TDR_20180404141951u.csv,TDR 5m Coaxial Cable Lab Experiment,5,0.137,negative,0.243,13.1,NO

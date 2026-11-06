@@ -69,6 +69,7 @@ When a propagating voltage wave encounters a localized impedance boundary $Z_{\m
 At the terminal end of the line ($z=l$), we evaluate six load classes:
 \begin{enumerate}
     \item \textbf{Matched Load ($Z_L = Z_0$):} $\Gamma_L = 0$; no reflection returns from the load.
+    \item \textbf{Open and Short ($Z_L \to \infty$, $Z_L = 0$):} $\Gamma_L = +1$ and $-1$.
     \item \textbf{Resistive Load ($Z_L = R_L$):} $\Gamma_L = (R_L - Z_0)/(R_L + Z_0)$.
     \item \textbf{Inductive-Resistive Load ($RL$ Series):} The load impedance $Z_L(s) = R_L + sL$ yields the reflection coefficient in the Laplace domain:
     \begin{equation}
@@ -79,13 +80,13 @@ At the terminal end of the line ($z=l$), we evaluate six load classes:
     \tau_{\mathrm{RL}} = \frac{L}{R_L + Z_0}
     \label{eq:tau_rl}
     \end{equation}
-    \item \textbf{Capacitive-Resistive Load ($RC$ Series):} The impedance $Z_L(s) = R_L + 1/(sC)$ produces:
+    \item \textbf{Capacitive-Resistive Load ($RC$ Parallel):} A resistor in parallel with a capacitor, $Z_L(s) = R_L/(1 + sR_LC)$, gives
     \begin{equation}
-    \Gamma_L(s) = \frac{s C (R_L - Z_0) + 1}{s C (R_L + Z_0) + 1}
+    \Gamma_L(s) = \frac{(R_L - Z_0) - s C R_L Z_0}{(R_L + Z_0) + s C R_L Z_0}
     \end{equation}
-    The initial reflection corresponds to a purely resistive reflection $\Gamma_0 = (R_L - Z_0)/(R_L + Z_0)$, which subsequently charges toward an open-circuit state ($\Gamma_\infty \to +1$) with time constant:
+    At the instant the step arrives the uncharged capacitor acts as a short ($\Gamma_0 = -1$), so the trace dips; as it charges the reflection relaxes to the resistive value $\Gamma_\infty = (R_L - Z_0)/(R_L + Z_0)$ with the time constant of $C$ discharging through $R_L \parallel Z_0$:
     \begin{equation}
-    \tau_{\mathrm{RC}} = C (R_L + Z_0)
+    \tau_{\mathrm{RC}} = C \, \frac{R_L Z_0}{R_L + Z_0}
     \label{eq:tau_rc}
     \end{equation}
 \end{enumerate}
@@ -106,7 +107,7 @@ A fault at distance $d$ produces its first echo at $t_f = 2d/u = (d/l) T_{\mathr
 
 \textbf{Physical Masking Constraints:}
 \begin{itemize}
-    \item \textit{Fault Location Masking:} When a cable is pristine (`none`), no fault discontinuity exists; hence the fault location $d/l$ is physically undefined and must be masked out during both model training and metric computation.
-    \item \textit{Load Masking by Hard Discontinuities:} If the cable contains an ideal hard short ($\Gamma = -1$) or hard open ($\Gamma = +1$), the discontinuity acts as a perfect electromagnetic reflector. No forward wave energy penetrates past $z=d$ to interrogate the downstream cable or termination. Consequently, downstream load class and parameter predictions are unobservable and must be masked out for samples with `short` or `open` faults.
+    \item \textit{Fault Location Masking:} When a cable is pristine (\texttt{none}), no fault discontinuity exists; hence the fault location $d/l$ is physically undefined and must be masked out during both model training and metric computation.
+    \item \textit{Load Masking by Hard Discontinuities:} If the cable contains an ideal hard short ($\Gamma = -1$) or hard open ($\Gamma = +1$), the discontinuity acts as a perfect electromagnetic reflector. No forward wave energy penetrates past $z=d$ to interrogate the downstream cable or termination. Consequently, downstream load class and parameter predictions are unobservable and must be masked out for samples with \texttt{short} or \texttt{open} faults.
 \end{itemize}
 

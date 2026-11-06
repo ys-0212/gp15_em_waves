@@ -18,6 +18,7 @@ Supports:
 
 import argparse
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -38,12 +39,40 @@ def get_git_hash() -> str:
 ALL_STAGES = ["gen", "validate", "conventional", "lgbm", "resnet", "evaluate", "figures"]
 
 
+PIPELINE_T0 = time.time()
+TIMINGS = {"commands": [], "stages": {}}
+CURRENT_STAGE = {"name": None}
+TIMINGS_PATH = Path("results") / "timings.json"
+
+
+def set_stage(name: str) -> None:
+    """Mark the start of a pipeline stage (used for per-stage wall-clock timing)."""
+    CURRENT_STAGE["name"] = name
+    TIMINGS["stages"].setdefault(name, 0.0)
+    print(f"\n##### STAGE: {name}  (pipeline elapsed {time.time() - PIPELINE_T0:.0f}s)")
+
+
+def _write_timings() -> None:
+    TIMINGS["total_elapsed_s"] = time.time() - PIPELINE_T0
+    TIMINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(TIMINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(TIMINGS, f, indent=2)
+
+
 def run_cmd(cmd_list: list):
-    """Run command with current python interpreter and check success."""
+    """Run command with current python interpreter, check success, record wall-clock time."""
     print(f"\n>>> Running: {' '.join(str(c) for c in cmd_list)}")
     t0 = time.time()
-    res = subprocess.run(cmd_list, check=True)
-    print(f">>> Finished in {time.time() - t0:.2f}s")
+    # UTF-8 mode for child scripts: on Windows the default text encoding (cp1252) cannot
+    # write characters such as Ohm/plus-minus signs used in tables and the dataset card.
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+    subprocess.run(cmd_list, check=True, env=env)
+    dt = time.time() - t0
+    stage = CURRENT_STAGE["name"] or "other"
+    TIMINGS["commands"].append({"stage": stage, "cmd": " ".join(str(c) for c in cmd_list[1:]), "seconds": round(dt, 2)})
+    TIMINGS["stages"][stage] = round(TIMINGS["stages"].get(stage, 0.0) + dt, 2)
+    _write_timings()
+    print(f">>> Finished in {dt:.2f}s | pipeline elapsed {(time.time() - PIPELINE_T0) / 60:.1f} min")
 
 
 def export_app_weights(weights_dir: Path, runs_dir: Path, mode: str, git_hash: str):
@@ -79,7 +108,7 @@ def export_app_weights(weights_dir: Path, runs_dir: Path, mode: str, git_hash: s
         "date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "models": ["resnet", "lgbm", "conventional"],
     }
-    with open(weights_dir / "weights_meta.json", "w") as f:
+    with open(weights_dir / "weights_meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
     print(f"Deployment weights and weights_meta.json exported to {weights_dir}")
 
@@ -94,7 +123,7 @@ def main():
     args = parser.parse_args()
 
     stages = [s.strip() for s in args.stages.split(",") if s.strip()]
-    with open(args.config, "r") as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     py_exe = sys.executable
@@ -111,6 +140,7 @@ def main():
 
     # Stage: gen
     if "gen" in stages:
+        set_stage("gen")
         suffix = "_quick" if is_quick else ""
         train_h5 = Path("data") / f"train{suffix}.h5"
         if args.skip_existing and train_h5.exists():
@@ -120,6 +150,7 @@ def main():
 
     # Stage: validate
     if "validate" in stages:
+        set_stage("validate")
         val_json = Path("results/sim_validation.json")
         if args.skip_existing and val_json.exists():
             print("Skipping 'validate' (sim_validation.json already exists)")
@@ -128,6 +159,7 @@ def main():
 
     # Stage: conventional
     if "conventional" in stages:
+        set_stage("conventional")
         conv_dir = runs_dir / "conventional"
         if args.skip_existing and (conv_dir / "metrics.json").exists():
             print("Skipping 'conventional' (already evaluated)")
@@ -136,6 +168,7 @@ def main():
 
     # Stage: lgbm
     if "lgbm" in stages:
+        set_stage("lgbm")
         seeds = cfg["quick"]["seeds"] if is_quick else cfg["experiments"]["seeds"]
         fracs = cfg["quick"]["learning_curve_fracs"] if is_quick else cfg["experiments"]["learning_curve_fracs"]
 
@@ -158,6 +191,7 @@ def main():
 
     # Stage: resnet
     if "resnet" in stages:
+        set_stage("resnet")
         seeds = cfg["quick"]["seeds"] if is_quick else cfg["experiments"]["seeds"]
         fracs = cfg["quick"]["learning_curve_fracs"] if is_quick else cfg["experiments"]["learning_curve_fracs"]
 
@@ -197,15 +231,19 @@ def main():
 
     # Stage: evaluate
     if "evaluate" in stages:
+        set_stage("evaluate")
         run_cmd([py_exe, "4_evaluate.py", "--device", args.device] + quick_flag)
         # Export seed-0 weights for app
         export_app_weights(weights_dir, runs_dir, args.mode, git_hash)
 
     # Stage: figures
     if "figures" in stages:
+        set_stage("figures")
         if Path("5_make_figures.py").exists():
             run_cmd([py_exe, "5_make_figures.py"])
 
+    _write_timings()
+    print("\nStage wall-clock (s):", json.dumps(TIMINGS["stages"], indent=2))
     print("\n" + "=" * 75)
     print("MASTER PIPELINE EXECUTION COMPLETE!")
     print("=" * 75)

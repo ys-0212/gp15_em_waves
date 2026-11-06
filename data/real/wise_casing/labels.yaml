@@ -1,118 +1,78 @@
-# Ground truth metadata for NREL/LBNL WISE-CASING TDR experimental dataset
-# Source: Geothermal Data Repository (GDR) Submission 1164 / OSTI ID 1559012
-# Dataset Title: "WISE-CASING: Time Domain Reflectometry Data from Lab Experiment on Coaxial Cable"
-# Authors: Wu, Yuxin; Wang, Jiannan (Lawrence Berkeley National Laboratory)
-# Permanent DOI: 10.15121/1559012
+# Documentation for the WISE-CASING lab TDR dataset, used as a real-data physical consistency check.
+#
+# Every "quote" below is copied verbatim from the dataset's public catalog entries:
+#   https://gdr.openei.org/submissions/1164
+#   https://catalog.data.gov/dataset/wise-casing-time-domain-reflectometry-data-from-lab-experiment-on-coaxial-cable
+# Citation: Y. Wu and J. Wang (Lawrence Berkeley National Laboratory), "WISE-CASING: Time Domain
+#   Reflectometry Data from Lab Experiment on Coaxial Cable," Geothermal Data Repository,
+#   submission 1164, 2018. DOI: 10.15121/1559012
+#
+# IMPORTANT measurement note (verified by inspecting the CSVs): these are PULSE-type TDR records.
+# The signal returns to ~0 between echoes, so they are not step responses like our simulator's.
+# The step-trained ML models are therefore NOT applied to them. They are used only for a physics
+# check of echo timing: velocity factor, and damage localisation by echo-time ratio.
+#
+# File-to-resource mapping: the CSV file names differ from the catalog resource names. The mapping
+# below follows the acquisition timestamps and was verified against the dataset's own figure
+# 3_cable_lengh_compare.pdf (echo positions of the 20 m / 10 m / 5 m curves) and against the
+# damaged/undamaged pair (the damage echo appears only in TDR_20180315195720u.csv).
 
-dataset: WISE-CASING
-organization: Lawrence Berkeley National Laboratory (LBNL)
-authors: "Wu, Yuxin; Wang, Jiannan"
+dataset: "WISE-CASING: Time Domain Reflectometry Data from Lab Experiment on Coaxial Cable"
+organization: "Lawrence Berkeley National Laboratory"
+authors: "Yuxin Wu; Jiannan Wang"
 doi: "10.15121/1559012"
-cable_type: "RG-85 coaxial cable"
-cable_type_source:
-  file: "GDR Submission 1164 Overview / Abstract"
-  quote: "This dataset features laboratory Time Domain Reflectometry (TDR) measurements using an 80-meter RG-85 coaxial cable to evaluate wellbore/casing integrity sensing."
+source_urls:
+  - "https://gdr.openei.org/submissions/1164"
+  - "https://catalog.data.gov/dataset/wise-casing-time-domain-reflectometry-data-from-lab-experiment-on-coaxial-cable"
 
-nominal_velocity_factor: "unknown"
-nominal_velocity_factor_source:
-  file: "GDR Submission 1164 Documentation"
-  quote: "Not explicitly documented in numerical form; nominal velocity factor for solid polyethylene RG-85 dielectric is assumed ~0.66 for time-grid alignment."
+description_quotes:
+  - "The coaxial-cable experiment conducted in the lab was with 80 m coaxial cable( RG-85)."
+  - "This experiment compares the TDR response between damaged and undamaged cable."
+  - "For the damaged cable, the damaged section is in the middle (40 m)."
+  - "The amplitude of the data is mV with time (us)."
 
-voltage_units: "mV"
-voltage_units_source:
-  file: "TDR_20180315194711u.csv header"
-  quote: "Time(us),Amplitude(mV)"
+units: {time: "us", amplitude: "mV"}   # also the CSV header: "Time(us),Amplitude(mV)"
+cable_type: "RG-85"                     # from the first description quote
+velocity_factor: null                   # not documented; estimated from the 80 m reference trace
 
-time_units: "us"
-time_units_source:
-  file: "TDR_20180315194711u.csv header"
-  quote: "Time(us),Amplitude(mV)"
+known_inconsistencies:
+  - "Description states an 80 m cable, but the cutaway resource says '85m coaxial cable'. We use 80 m (stated in the main description); the 6% difference is reported, not resolved."
+  - "Echo times of the 5 m / 10 m / 20 m files do not scale with the stated lengths at any single velocity (see results/tables/real_data.md). These files are reported but excluded from velocity estimation."
+
+reference_trace: "TDR_20180315194711u.csv"   # undamaged 80 m, shorted: used to estimate vf
 
 traces:
   TDR_20180315194711u.csv:
-    description: "TDR response of undamaged 80 m cable with shorted termination"
+    resource_name: "TDR Shorted Termination Pre-Damage.csv"
+    resource_quote: "TDR response of the shorted termination of undamaged cable."
     cable_length_m: 80.0
-    cable_length_source:
-      file: "GDR Submission 1164 Overview / Abstract"
-      quote: "using an 80-meter RG-85 coaxial cable"
-    fault_type: "none"
-    fault_type_source:
-      file: "TDR_coaxial.pptx (Slide 1)"
-      quote: "Coaxial cable without damage"
-    fault_location_m: null
-    load_type: "short"
-    load_type_source:
-      file: "GDR Submission 1164 Resource Catalog"
-      quote: "pre- and post-damage shorted terminations"
-    incident_edge_time_us: 0.064
+    damage: null
+    termination: "short"
 
   TDR_20180315195720u.csv:
-    description: "TDR response of 80 m cable with physical cutaway damage at 40 m and shorted termination"
+    resource_name: "TDR Shorted Termination with 120 Degree Cutaway.csv"
+    resource_quote: "TDR response of the shorted termination with 120 degree cutaway at 40m of 85m coaxial cable."
     cable_length_m: 80.0
-    cable_length_source:
-      file: "GDR Submission 1164 Overview / Abstract"
-      quote: "using an 80-meter RG-85 coaxial cable"
-    fault_type: "damage (unmapped)"
-    fault_type_source:
-      file: "TDR_coaxial.pptx (Slide 1) & GDR Submission 1164 Description"
-      quote: "Undamaged and damage ... a controlled physical impairment or deformation is intentionally introduced to the middle section (specifically spanning the middle 40 meters of the 80 m line)"
-    fault_location_m: 40.0
-    fault_location_source:
-      file: "GDR Submission 1164 Description"
-      quote: "specifically spanning the middle 40 meters of the 80 m line"
-    load_type: "short"
-    load_type_source:
-      file: "GDR Submission 1164 Resource Catalog"
-      quote: "pre- and post-damage shorted terminations"
-    incident_edge_time_us: 0.050
+    damage: {type: "120 degree shield cutaway (not one of our simulated fault classes)", location_m: 40.0}
+    termination: "short"
 
   TDR_20180404134819u.csv:
-    description: "TDR response of undamaged 20 m cable with shorted termination"
+    resource_name: "TDR 20m Coaxial Cable Lab Experiment .csv"
+    resource_quote: "TDR response of the undamaged 20m coaxial cable with shorted termination."
     cable_length_m: 20.0
-    cable_length_source:
-      file: "3_cable_lengh_compare.pdf (Plot stream / legend)"
-      quote: "20m Cable"
-    fault_type: "none"
-    fault_type_source:
-      file: "GDR Submission 1164 Resource Title"
-      quote: "Plot Comparison of Three Shorted Termination with Different Length.pdf"
-    fault_location_m: null
-    load_type: "short"
-    load_type_source:
-      file: "GDR Submission 1164 Resource Title"
-      quote: "Plot Comparison of Three Shorted Termination with Different Length.pdf"
-    incident_edge_time_us: 0.060
+    damage: null
+    termination: "short"
 
   TDR_20180404135441u.csv:
-    description: "TDR response of undamaged 10 m cable with shorted termination"
-    cable_length_m: 10.0
-    cable_length_source:
-      file: "3_cable_lengh_compare.pdf (Plot stream / legend)"
-      quote: "10m Cable"
-    fault_type: "none"
-    fault_type_source:
-      file: "GDR Submission 1164 Resource Title"
-      quote: "Plot Comparison of Three Shorted Termination with Different Length.pdf"
-    fault_location_m: null
-    load_type: "short"
-    load_type_source:
-      file: "GDR Submission 1164 Resource Title"
-      quote: "Plot Comparison of Three Shorted Termination with Different Length.pdf"
-    incident_edge_time_us: 0.054
+    resource_name: "TDR 10m Coaxial Cable Lab Experiment.csv"
+    resource_quote: "TDR response of the undamaged coaxial cable with shorted termination."
+    cable_length_m: 10.0      # length from the resource title and the dataset figure legend ("10m Cable")
+    damage: null
+    termination: "short"
 
   TDR_20180404141951u.csv:
-    description: "TDR response of undamaged 5 m cable with shorted termination"
+    resource_name: "TDR 5m Coaxial Cable Lab Experiment.csv"
+    resource_quote: "TDR response of the undamaged 5m coaxial cable with shorted termination."
     cable_length_m: 5.0
-    cable_length_source:
-      file: "3_cable_lengh_compare.pdf (Plot stream / legend)"
-      quote: "5m Cable"
-    fault_type: "none"
-    fault_type_source:
-      file: "GDR Submission 1164 Resource Title"
-      quote: "Plot Comparison of Three Shorted Termination with Different Length.pdf"
-    fault_location_m: null
-    load_type: "short"
-    load_type_source:
-      file: "GDR Submission 1164 Resource Title"
-      quote: "Plot Comparison of Three Shorted Termination with Different Length.pdf"
-    incident_edge_time_us: 0.062
+    damage: null
+    termination: "short"

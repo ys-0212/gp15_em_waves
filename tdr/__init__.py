@@ -23,6 +23,7 @@ from tdr.data import (
     preprocess_numpy,
     TDRDataset,
     load_real_wise_casing,
+    analyse_real_wise_casing,
 )
 from tdr.features import (
     ConventionalTDR,

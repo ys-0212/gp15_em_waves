@@ -63,6 +63,6 @@ The production corpus comprises:
     \end{enumerate}
 \end{itemize}
 
-\subsection{Experimental Field Dataset: NREL WISE-CASING}
-To validate cross-domain transferability on physical hardware, we integrate experimental laboratory data from the NREL/LBNL WISE-CASING dataset \cite{nrel_wise_casing} (DOI: 10.15121/1559012). This corpus comprises TDR measurements of 85~m RG-85 coaxial cables in pristine conditions and with a calibrated $120^\circ$ circumferential shield cutaway located at $d = 40$~m, alongside benchmark traces on shorter cable lengths (20~m, 10~m, and 5~m). Traces are mapped to dimensionless time $t/T_{\mathrm{nom}}$, aligned at $t_{\mathrm{inc}}$, and normalized to unit incident step plateau.
+\subsection{Laboratory Dataset: WISE-CASING}
+As a physical sanity check we use the public WISE-CASING laboratory TDR records \cite{nrel_wise_casing} (Lawrence Berkeley National Laboratory): an 80~m RG-85 coaxial cable with shorted termination, measured undamaged and with a $120^\circ$ shield cutaway at 40~m, plus records documented as 20, 10 and 5~m cables. These are \emph{pulse-type} reflectometry records (the signal returns to zero between echoes), not step responses, so the step-trained models are not applied to them. Instead we verify the propagation physics on real hardware: the velocity factor is estimated from the undamaged 80~m record, and the damage is located from the ratio of echo times (Section~\ref{sec:real_results}).
 

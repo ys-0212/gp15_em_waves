@@ -22,10 +22,13 @@ from tdr.data import (
     preprocess_numpy,
     preprocess,
     load_real_wise_casing,
+    analyse_real_wise_casing,
     decode_load_r,
     decode_load_tau,
 )
-from tdr.features import ConventionalTDR, extract_features
+from tdr.features import ConventionalTDR, extract_features, cached_features
+
+FEATURE_CACHE_DIR = Path("data") / "cache"
 from tdr.models import LGBMSuite, ResNet1D
 from tdr.metrics import compute_all_metrics
 
@@ -42,10 +45,10 @@ def get_git_hash() -> str:
 def export_table(df: pd.DataFrame, base_path: Path):
     """Save dataframe as CSV, LaTeX (booktabs), and Markdown."""
     base_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(base_path.with_suffix(".csv"), index=False)
-    df.to_markdown(base_path.with_suffix(".md"), index=False)
+    df.to_csv(base_path.with_suffix(".csv"), index=False, encoding="utf-8")
+    base_path.with_suffix(".md").write_text(df.to_markdown(index=False) + "\n", encoding="utf-8")
     latex_str = df.to_latex(index=False, escape=True)
-    with open(base_path.with_suffix(".tex"), "w") as f:
+    with open(base_path.with_suffix(".tex"), "w", encoding="utf-8") as f:
         f.write(latex_str)
 
 
@@ -54,11 +57,11 @@ def log_run(log_path: Path, run_id: str, git_hash: str, mode: str, metrics_summa
     log_path.parent.mkdir(parents=True, exist_ok=True)
     header = "# Execution and Evaluation Log\n\n| Timestamp | Run ID | Git Hash | Mode | Key Metrics |\n|---|---|---|---|---|\n"
     if not log_path.exists():
-        with open(log_path, "w") as f:
+        with open(log_path, "w", encoding="utf-8") as f:
             f.write(header)
 
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
-    with open(log_path, "a") as f:
+    with open(log_path, "a", encoding="utf-8") as f:
         f.write(f"| {ts} | `{run_id}` | `{git_hash[:7]}` | {mode} | {metrics_summary} |\n")
 
 
@@ -95,8 +98,12 @@ def evaluate_resnet_on_traces(
     elif in_channels == 2:
         x_norm = x_norm[:, [0, 1], :]
 
+    model.eval()
+    chunks = []
     with torch.no_grad():
-        preds = model(x_norm)
+        for i in range(0, b, 2048):
+            chunks.append({k: v.float().cpu() for k, v in model(x_norm[i:i + 2048]).items()})
+    preds = {k: torch.cat([c[k] for c in chunks], dim=0) for k in chunks[0]}
 
     fault_probs = F.softmax(preds["fault_logits"], dim=-1).cpu().numpy()
     fault_pred_id = np.argmax(fault_probs, axis=1)
@@ -125,9 +132,8 @@ def evaluate_lgbm_on_traces(
     snr_db: float,
     seed: int,
 ) -> pd.DataFrame:
-    """Evaluate LGBMSuite on given clean traces with specific noise."""
-    preproc = preprocess_numpy(clean_traces, meta_df["v_inc"].values, snr_db=snr_db, seed=seed, add_noise=True)
-    feats = extract_features(preproc)
+    """Evaluate LGBMSuite on given clean traces with specific noise (features cached on disk)."""
+    feats = cached_features(FEATURE_CACHE_DIR, clean_traces, meta_df["v_inc"].values, snr_db, seed, preprocess_numpy)
     preds = suite.predict(feats)
 
     df_out = meta_df.copy()
@@ -149,7 +155,7 @@ def evaluate_conventional_on_traces(
 ) -> pd.DataFrame:
     """Evaluate ConventionalTDR on given clean traces with specific noise."""
     preproc = preprocess_numpy(clean_traces, meta_df["v_inc"].values, snr_db=snr_db, seed=seed, add_noise=True)
-    preds = solver.predict_batch(preproc)
+    preds = solver.predict_batch(preproc, meta_df["length_m"].values)
 
     df_out = meta_df.copy()
     df_out["pred_fault_class"] = [p["fault_class"] for p in preds]
@@ -168,10 +174,12 @@ def run_all_evaluations(
     device_name: str = "cpu",
 ):
     """Execute evaluation protocol covering E1-E8."""
-    with open(cfg_path, "r") as f:
+    with open(cfg_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     data_dir = Path(cfg["paths"]["data"])
+    global FEATURE_CACHE_DIR
+    FEATURE_CACHE_DIR = data_dir / "cache"
     results_dir = Path(cfg["paths"]["results"])
     runs_dir = results_dir / "runs"
     tables_dir = results_dir / "tables"
@@ -202,16 +210,11 @@ def run_all_evaluations(
     # Load conventional solver
     conv_cfg_path = runs_dir / "conventional" / "conventional.json"
     if conv_cfg_path.exists():
-        with open(conv_cfg_path, "r") as f:
+        with open(conv_cfg_path, "r", encoding="utf-8") as f:
             conv_cfg = json.load(f)
-        conv_solver = ConventionalTDR(
-            k_sigma=conv_cfg["best_k_sigma"],
-            min_sep_samples=conv_cfg["min_sep_samples"],
-            transient_return_samples=conv_cfg["transient_return_samples"],
-            z0_nominal=conv_cfg["z0_nominal"],
-        )
+        conv_solver = ConventionalTDR.from_dict(conv_cfg)
     else:
-        conv_solver = ConventionalTDR(k_sigma=4.0)
+        conv_solver = ConventionalTDR()
 
     # Load main model suites (seeds)
     seeds = cfg["quick"]["seeds"] if quick else cfg["experiments"]["seeds"]
@@ -232,7 +235,7 @@ def run_all_evaluations(
         norm_file = res_dir / "resnet_norm.json"
         if ckpt.exists() and norm_file.exists():
             resnet_models[s] = load_resnet_model(ckpt, in_channels=3, device=device)
-            with open(norm_file, "r") as f:
+            with open(norm_file, "r", encoding="utf-8") as f:
                 resnet_norms[s] = json.load(f)
 
     # =====================================================================
@@ -375,6 +378,16 @@ def run_all_evaluations(
             "MAPE C (%)": f"{np.mean(m_c):.1f}" if len(seeds) == 1 else f"{np.mean(m_c):.1f} ± {np.std(m_c):.1f}",
         })
 
+    # Seed-0 TEST metrics (incl. confusion matrices) for the figures. The run folders'
+    # metrics.json files hold VALIDATION metrics, so figures must not read those.
+    test_metrics_s0 = {"conventional": m_conv, "split": "test", "snr_db": 30.0}
+    if lgbm_metrics:
+        test_metrics_s0["lgbm"] = lgbm_metrics[0]
+    if resnet_metric_list:
+        test_metrics_s0["resnet"] = resnet_metric_list[0]
+    with open(exp_dir / "test_metrics_s0.json", "w", encoding="utf-8") as f:
+        json.dump(test_metrics_s0, f, indent=2)
+
     df_e1 = pd.DataFrame(e1_records)
     export_table(df_e1, tables_dir / "main_comparison")
     print(df_e1.to_string(index=False))
@@ -428,7 +441,7 @@ def run_all_evaluations(
                 "fault_f1": mrs["t1_fault"]["macro_f1"], "loc_mae": mrs["t2_loc"]["mae_m"], "load_acc": mrs["t3_load"]["accuracy"]
             }
 
-    with open(exp_dir / "noise_sweep.json", "w") as f:
+    with open(exp_dir / "noise_sweep.json", "w", encoding="utf-8") as f:
         json.dump(e2_dict, f, indent=2)
 
     # Export noise sweep table
@@ -491,7 +504,7 @@ def run_all_evaluations(
             "resnet": {"fault_f1": mrs["t1_fault"]["macro_f1"], "loc_mae": mrs["t2_loc"]["mae_m"], "load_acc": mrs["t3_load"]["accuracy"]} if mrs else {},
         }
 
-    with open(exp_dir / "ood_results.json", "w") as f:
+    with open(exp_dir / "ood_results.json", "w", encoding="utf-8") as f:
         json.dump(e3_dict, f, indent=2)
 
     e3_rows = []
@@ -545,8 +558,43 @@ def run_all_evaluations(
             "loc_error_vs_position": loc_err_vs_pos,
             "loc_error_vs_gamma": loc_err_vs_gamma,
         }
-        with open(exp_dir / "error_breakdowns.json", "w") as f:
+        with open(exp_dir / "error_breakdowns.json", "w", encoding="utf-8") as f:
             json.dump(breakdowns, f, indent=2)
+
+    # E4b: Soft-fault recall vs |Gamma_nominal| for every method (detection limit analysis)
+    soft_classes = ["shunt_R", "series_R", "shunt_C", "z0_section"]
+    g_edges = [0.0, 0.05, 0.1, 0.2, 0.4, 1.0]
+    method_dfs = {"Conventional TDR": evaluate_conventional_on_traces(conv_solver, clean_test, meta_test, 30.0, eval_seed)}
+    if 0 in lgbm_suites:
+        method_dfs["LightGBM"] = df_l4
+    if 0 in resnet_models:
+        method_dfs["Multi-Task ResNet1D"] = evaluate_resnet_on_traces(
+            resnet_models[0], clean_test, meta_test, resnet_norms[0], snr_db=30.0, seed=eval_seed, device=device)
+    recall_rows = []
+    for mname, dfm in method_dfs.items():
+        g_abs = np.abs(dfm["fault_gamma_nominal"].values)
+        for cls in soft_classes:
+            is_cls = dfm["fault_class"].values == cls
+            for gi in range(len(g_edges) - 1):
+                sel = is_cls & (g_abs >= g_edges[gi]) & (g_abs < g_edges[gi + 1])
+                if cls == "shunt_C":  # Gamma is frequency dependent: one row over all samples
+                    if gi > 0:
+                        continue
+                    sel = is_cls
+                n_sel = int(sel.sum())
+                if n_sel == 0:
+                    continue
+                pred = dfm["pred_fault_class"].values[sel]
+                recall_rows.append({
+                    "method": mname,
+                    "fault_class": cls,
+                    "gamma_bin": "all (frequency dependent)" if cls == "shunt_C" else f"[{g_edges[gi]:.2f}, {g_edges[gi + 1]:.2f})",
+                    "n": n_sel,
+                    "detected_pct": float(np.mean(pred != "none") * 100.0),
+                    "correct_pct": float(np.mean(pred == cls) * 100.0),
+                })
+    if recall_rows:
+        export_table(pd.DataFrame(recall_rows), tables_dir / "recall_vs_gamma")
 
     # =====================================================================
     # E5: Learning Curves
@@ -561,7 +609,7 @@ def run_all_evaluations(
         l_id = f"lgbm_s0" if f_val == 1.0 else f"lgbm_frac{f_val}_s0"
         l_m_path = runs_dir / l_id / "metrics.json"
         if l_m_path.exists():
-            with open(l_m_path, "r") as f_m:
+            with open(l_m_path, "r", encoding="utf-8") as f_m:
                 m_data = json.load(f_m)
             e5_dict["lgbm"][str(f_val)] = {
                 "fault_f1": m_data["t1_fault"]["macro_f1"],
@@ -572,7 +620,7 @@ def run_all_evaluations(
         r_id = f"resnet_s0" if f_val == 1.0 else f"resnet_frac{f_val}_s0"
         r_m_path = runs_dir / r_id / "metrics.json"
         if r_m_path.exists():
-            with open(r_m_path, "r") as f_m:
+            with open(r_m_path, "r", encoding="utf-8") as f_m:
                 m_data = json.load(f_m)
             e5_dict["resnet"][str(f_val)] = {
                 "fault_f1": m_data["t1_fault"]["macro_f1"],
@@ -580,7 +628,7 @@ def run_all_evaluations(
                 "load_acc": m_data["t3_load"]["accuracy"],
             }
 
-    with open(exp_dir / "learning_curves.json", "w") as f:
+    with open(exp_dir / "learning_curves.json", "w", encoding="utf-8") as f:
         json.dump(e5_dict, f, indent=2)
 
     for f_val in fracs:
@@ -612,7 +660,7 @@ def run_all_evaluations(
     for label, r_id in ablation_runs:
         m_path = runs_dir / r_id / "metrics.json"
         if m_path.exists():
-            with open(m_path, "r") as f_m:
+            with open(m_path, "r", encoding="utf-8") as f_m:
                 m_data = json.load(f_m)
             e6_dict[r_id] = m_data
             e6_rows.append({
@@ -633,7 +681,7 @@ def run_all_evaluations(
                     "Load Acc (%)": f"{m_data['t3_load']['accuracy']*100:.2f}",
                 })
 
-    with open(exp_dir / "ablations.json", "w") as f:
+    with open(exp_dir / "ablations.json", "w", encoding="utf-8") as f:
         json.dump(e6_dict, f, indent=2)
     export_table(pd.DataFrame(e6_rows), tables_dir / "ablations")
 
@@ -660,7 +708,7 @@ def run_all_evaluations(
                 "top_feature_indices": np.argsort(mean_abs_shap)[::-1][:20].tolist(),
                 "top_feature_importances": np.sort(mean_abs_shap)[::-1][:20].tolist(),
             }
-            with open(exp_dir / "shap_summary.json", "w") as f:
+            with open(exp_dir / "shap_summary.json", "w", encoding="utf-8") as f:
                 json.dump(shap_summary, f, indent=2)
             print("SHAP values computed and saved to shap_summary.json")
         except Exception as e:
@@ -669,78 +717,45 @@ def run_all_evaluations(
     # =====================================================================
     # E8: Real Data (WISE-CASING)
     # =====================================================================
-    print("\n[E8] Evaluating on Real WISE-CASING Lab TDR Data...")
-    real_meta_path = data_dir / "real" / "wise_casing" / "labels.yaml"
-    if real_meta_path.exists():
+    print("\n[E8] Real WISE-CASING lab data: physics consistency check (pulse-type TDR, no ML)...")
+    real_dir = data_dir / "real" / "wise_casing"
+    if (real_dir / "labels.yaml").exists():
         try:
-            real_data = load_real_wise_casing(data_dir / "real" / "wise_casing")
-            real_traces = real_data["traces"]
-            real_inputs = real_data["inputs"]
-            real_meta = real_data["meta"]
-
-            # 1. Conventional
-            conv_preds = pd.DataFrame(conv_solver.predict_batch(real_inputs.numpy()))
-
-            # 2. LGBM
-            lgbm_preds = None
-            if 0 in lgbm_suites:
-                feats = extract_features(real_inputs.numpy())
-                lgbm_preds = lgbm_suites[0].predict(feats)
-
-            # 3. ResNet
-            resnet_preds = None
-            if 0 in resnet_models:
-                resnet = resnet_models[0].to(device)
-                resnet.eval()
-                mu = torch.tensor(resnet_norms[0]["mean"]).view(1, 3, 1).to(device)
-                sig = torch.tensor(resnet_norms[0]["std"]).view(1, 3, 1).to(device)
-                x_norm = (real_inputs.to(device) - mu) / sig
-                with torch.no_grad():
-                    out = resnet(x_norm)
-                    pred_f_cls = torch.argmax(out["fault_logits"], dim=1).cpu().numpy()
-                    pred_l_cls = torch.argmax(out["load_cls_logits"], dim=1).cpu().numpy()
-                    pred_loc_frac = out["loc_pred"].cpu().numpy()
-
-                resnet_preds = {
-                    "fault_class": [FAULT_CLASSES[i] for i in pred_f_cls],
-                    "load_class": [LOAD_CLASSES[i] for i in pred_l_cls],
-                    "fault_pos_frac": pred_loc_frac,
-                }
-
-            real_rows = []
-            for i, r in real_meta.iterrows():
-                row = {
-                    "Trace": r["filename"],
-                    "Cable (m)": f"{r['cable_length_m']:.0f}",
-                    "True Fault": r["fault_type"],
-                    "True Loc (m)": f"{r['fault_pos_m']:.1f}" if pd.notna(r["fault_pos_m"]) else "None",
-                    "True Load": r["load_type"],
-                    "Conv Fault": conv_preds["fault_class"].iloc[i],
-                    "Conv Load": conv_preds["load_class"].iloc[i],
-                }
-                if lgbm_preds is not None:
-                    row["LGBM Fault"] = lgbm_preds["fault_class"][i]
-                    row["LGBM Load"] = lgbm_preds["load_class"][i]
-                if resnet_preds is not None:
-                    row["ResNet Fault"] = resnet_preds["fault_class"][i]
-                    row["ResNet Load"] = resnet_preds["load_class"][i]
-                    res_loc_m = resnet_preds["fault_pos_frac"][i] * r["cable_length_m"]
-                    row["ResNet Loc (m)"] = f"{res_loc_m:.1f}"
-                real_rows.append(row)
-
-            df_real = pd.DataFrame(real_rows)
+            real = analyse_real_wise_casing(real_dir, vf_nominal=cfg["physics"]["vf_nominal"])
+            df_rt = real["table"]
+            df_real = pd.DataFrame({
+                "File": df_rt["file"],
+                "Documented setup": df_rt["resource"].str.replace(".csv", "", regex=False),
+                "Doc. length (m)": df_rt["documented_length_m"].map(lambda x: f"{x:.0f}"),
+                "Round trip (us)": df_rt["round_trip_us"].map(lambda x: f"{x:.3f}"),
+                "Echo polarity": df_rt["echo_polarity"],
+                "Implied vf": df_rt["implied_vf"].map(lambda x: f"{x:.3f}"),
+                "Distance at vf_est (m)": df_rt.get("distance_at_vf_est_m", pd.Series(np.nan, index=df_rt.index)).map(lambda x: f"{x:.1f}"),
+                "Consistent": df_rt.get("consistent_with_vf_est", pd.Series(None, index=df_rt.index)).map(
+                    lambda x: "n/a (damage echo)" if x is None else ("yes" if x else "NO")),
+            })
             export_table(df_real, tables_dir / "real_data")
-
-            with open(exp_dir / "real_data_eval.json", "w") as f:
+            loc_rows = real.get("damage_localisation", [])
+            if loc_rows:
+                export_table(pd.DataFrame([{
+                    "Documented (m)": f"{r['documented_damage_m']:.1f}",
+                    "Echo-time ratio (m)": f"{r['estimated_by_time_ratio_m']:.1f}",
+                    "At nominal vf (m)": f"{r['estimated_at_vf_nominal_m']:.1f}",
+                    "Error (m)": f"{r['error_m']:+.1f}",
+                    "Echo polarity": r["echo_polarity"],
+                } for r in loc_rows]), tables_dir / "real_damage_localisation")
+            with open(exp_dir / "real_data_eval.json", "w", encoding="utf-8") as f:
                 json.dump({
-                    "meta": real_meta.to_dict(orient="records"),
-                    "eval_table": real_rows
-                }, f, indent=2)
-            print("Real data evaluation completed and saved to results/tables/real_data.md")
+                    "vf_est": real.get("vf_est"),
+                    "damage_localisation": loc_rows,
+                    "table": df_rt.astype(object).where(df_rt.notna(), None).to_dict(orient="records"),
+                    "note": "Pulse-type TDR records; step-trained ML models are not applied (domain mismatch).",
+                }, f, indent=2, default=str)
+            print(f"  vf_est = {real.get('vf_est'):.3f}; damage localisation: {loc_rows}")
         except Exception as e:
-            print(f"Real data evaluation warning: {e}")
+            print(f"Real data analysis warning: {e}")
     else:
-        print("Real data not yet loaded. Skipping E8 gracefully (logged in report/antigravity.md).")
+        print("Real data not available. Skipping E8.")
 
     # Append to LOG.md
     summary_str = f"LGBM F1: {df_e1.iloc[1]['Fault Macro-F1']}, ResNet F1: {df_e1.iloc[2]['Fault Macro-F1']}" if len(df_e1) > 2 else "Eval done"

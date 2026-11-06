@@ -6,21 +6,23 @@
 % Topics to expand:
 % 1. Comparative analysis of Gradient Boosted Trees (LightGBM) vs Deep 1D-ResNet representation learning.
 % 2. Error mode breakdown: high-frequency attenuation smearing in long lines and edge overlapping in near-load regimes.
-% 3. Effectiveness of the Savitzky-Golay FIR derivative channel in regularizing edge localization.
+% 3. Effectiveness of the Savitzky-Golay derivative channel (use the channel ablation E6, not assumption).
+% 6. Detection limit vs |Gamma| for each method (results/tables/recall_vs_gamma) and where ML adds value over textbook TDR.
 % 4. Interpretation of physics-masked multi-task loss dynamics and gradient stability across conflicting targets.
 % 5. Explainability insights from SHAP feature attributions on impedance discontinuities.
 
-The benchmark results validate the necessity of physics-informed representations when diagnosing distributed transmission line systems. While classical edge-detection mechanisms break down under dispersion and multiple overlapping echoes, machine learning models exhibit strong resilience by capturing holistic wave dynamics across the entire normalized propagation window.
+% (Prose to be written from the full-run results; no claims are made here before the numbers exist.)
 
 \subsection{Limitations and Future Scope}
 % TODO (Prompt 2): In-depth discussion of physical limitations and future research avenues:
 % 1. Extension from single-discontinuity cables to branched wiring topologies and complex network meshes (e.g., aircraft harnesses).
 % 2. Incorporation of variable temperature profiles along the line length altering local resistance and dielectric permittivity.
 % 3. Adaptation to non-TEM waveguides, twisted pairs, and multi-conductor transmission lines with modal dispersion.
-% 4. Few-shot domain adaptation to close the sim-to-real gap on uncalibrated commercial TDR instruments.
+% 4. Real-data validation of the ML models: the WISE-CASING records are pulse-type, so only the echo-timing physics was checked; step-type measurements (e.g. a NanoVNA/TDR on lab coax) would allow a true sim-to-real test.
+% 5. Few-shot domain adaptation to close the sim-to-real gap on uncalibrated commercial TDR instruments.
 
 \subsection{Conclusion}
 % TODO (Prompt 2): Final concluding summary emphasizing key quantitative milestones from the full dataset run.
 
-In this work, we presented a complete end-to-end framework for machine-learning-based transmission line fault and load identification via time-domain reflectometry. Grounded in an exact frequency-domain telegrapher cascade simulator capturing copper skin effect and dielectric losses, our 3-channel standardized representation enables simultaneous fault classification (T1), precise metric localization (T2), and complex reactive termination estimation (T3). The physics-masked multi-task loss guarantees uncorrupted training gradients, while empirical benchmarking confirms robust generalization across severe noise levels, out-of-distribution physical shifts, and real-world laboratory coaxial cable measurements.
+In this work, we presented an end-to-end framework for machine-learning-based transmission line fault and load identification via time-domain reflectometry, built on an exact frequency-domain lossy-line simulator (skin effect and dielectric loss) and compared against a conventional rule-based TDR baseline. % TODO (Prompt 2): summarise the measured results (main comparison, noise robustness, OOD, real-data physics check) and their limits.
 

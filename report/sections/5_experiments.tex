@@ -10,14 +10,14 @@ Diagnostic performance across the three tasks is measured using the following st
         \item Macro-Averaged $F_1$ Score: unweighted mean across all 7 classes, penalizing poor performance on minority fault categories.
         \item 7 $\times$ 7 Confusion Matrices.
     \end{itemize}
-    \item \textbf{Task 2 (Fault Localization):} Computed strictly over all samples where the ground-truth fault is present ($y_{\mathrm{fault}} \ne \text{`none`}$):
+    \item \textbf{Task 2 (Fault Localization):} Computed strictly over all samples where the ground-truth fault is present ($y_{\mathrm{fault}} \ne \text{\texttt{none}}$):
     \begin{itemize}
         \item Mean Absolute Error in metres: $\mathrm{MAE} = \frac{1}{N_{\mathrm{fault}}} \sum_{i=1}^{N_{\mathrm{fault}}} |\hat{d}_i - d_i|$.
         \item Median Absolute Error in metres: robust to extreme outliers.
         \item 90th Percentile Error ($P_{90}$ in metres): captures boundary failure cases.
         \item Sub-Metre Localization Rate: fraction of faulty samples localized within $1.0$~m of ground truth ($\% < 1.0$~m).
     \end{itemize}
-    \item \textbf{Task 3 (Load Characterization):} Computed strictly over samples where the load is physically observable ($y_{\mathrm{fault}} \notin \{\text{`short`}, \text{`open`}\}$):
+    \item \textbf{Task 3 (Load Characterization):} Computed strictly over samples where the load is physically observable ($y_{\mathrm{fault}} \notin \{\text{\texttt{short}}, \text{\texttt{open}}\}$):
     \begin{itemize}
         \item Load Classification Accuracy (\%) and Macro-$F_1$ across 6 classes.
         \item Mean Absolute Percentage Error (MAPE) on termination resistance: $\mathrm{MAPE}(R_L) = \frac{100\%}{N} \sum |\hat{R}_{L, i} - R_{L, i}| / R_{L, i}$.
@@ -40,6 +40,6 @@ Our experimental protocol comprises eight systematic investigations:
         \item Multi-task synergy: Joint multi-task learning vs. three independent single-task networks dedicated to T1, T2, and T3.
     \end{enumerate}
     \item \textbf{E7: Explainability via SHAP Analysis:} Global and local feature attributions using TreeExplainer \cite{lundberg2017unified} to interpret decision boundaries in the LightGBM models.
-    \item \textbf{E8: Empirical Validation on Laboratory TDR Data:} Evaluating zero-shot inference on physical coaxial cable measurements from the NREL WISE-CASING dataset \cite{nrel_wise_casing}.
+    \item \textbf{E8: Physical Consistency on Laboratory TDR Data:} on the WISE-CASING pulse-TDR records \cite{nrel_wise_casing}, measure round-trip echo times, estimate the velocity factor from the undamaged 80~m cable, locate the 40~m cutaway by echo-time ratio, and flag records whose echo times contradict their documented length.
 \end{itemize}
 

@@ -1,0 +1,84 @@
+{
+  "commands": [
+    {
+      "stage": "gen",
+      "cmd": "2_generate_data.py --quick",
+      "seconds": 12.11
+    },
+    {
+      "stage": "validate",
+      "cmd": "1_validate_simulator.py",
+      "seconds": 4.32
+    },
+    {
+      "stage": "conventional",
+      "cmd": "3_train.py --model conventional --quick",
+      "seconds": 26.02
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 0 --quick",
+      "seconds": 43.78
+    },
+    {
+      "stage": "lgbm",
+      "cmd": "3_train.py --model lgbm --seed 0 --train-frac 0.25 --quick",
+      "seconds": 15.95
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --device cpu --quick",
+      "seconds": 54.97
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --train-frac 0.25 --device cpu --quick",
+      "seconds": 20.99
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --channels v --device cpu --quick",
+      "seconds": 52.23
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --channels v,dv --device cpu --quick",
+      "seconds": 50.88
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --single-task fault --device cpu --quick",
+      "seconds": 50.49
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --single-task loc --device cpu --quick",
+      "seconds": 50.96
+    },
+    {
+      "stage": "resnet",
+      "cmd": "3_train.py --model resnet --seed 0 --single-task load --device cpu --quick",
+      "seconds": 51.67
+    },
+    {
+      "stage": "evaluate",
+      "cmd": "4_evaluate.py --device cpu --quick",
+      "seconds": 45.0
+    },
+    {
+      "stage": "figures",
+      "cmd": "5_make_figures.py",
+      "seconds": 16.65
+    }
+  ],
+  "stages": {
+    "gen": 12.11,
+    "validate": 4.32,
+    "conventional": 26.02,
+    "lgbm": 59.73,
+    "resnet": 332.19,
+    "evaluate": 45.0,
+    "figures": 16.65
+  },
+  "total_elapsed_s": 496.1319053173065
+}

@@ -2,7 +2,7 @@
 
 **Course:** EE 305 Electromagnetic Waves, Indian Institute of Technology Indore (IIT Indore)  
 **Theme 4:** Machine-Learning-Based Transmission Line Fault and Load Identification  
-**Author:** Shlok Parikh (Department of Electrical Engineering, IIT Indore)  
+**Author:** Shlok Parikh (Department of Chemical Engineering, IIT Indore)  
 **Deliverables:** Complete tested codebase and IEEE-style conference research report (`report/main.tex`).
 
 ---
@@ -37,9 +37,9 @@ From a single raw TDR trace, this system simultaneously solves three coupled dia
 1. **Exact Physics Simulator (`tdr/simulator.py`):** Solves the lossy telegrapher's equations in the frequency domain via analytical two-port cascade matrix transformations ($N_{\text{sim}} = 8192$ points), synthesized via inverse FFT without grid dispersion.
 2. **Unified Preprocessing (`tdr/data.py`):** Normalizes voltage to the incident plateau ($\tilde{v} = v/v_{\text{inc}}$), computes the smoothed numerical first derivative ($d\tilde{v}/dt$) using a 1D Conv Savitzky-Golay FIR filter, and appends a dimensionless coordinate channel ($t/T_{\text{nom}}$), outputting a $[3, 1024]$ tensor.
 3. **Multi-Model Diagnosis:**
-   - **Conventional TDR:** Noise floor estimation via MAD, adaptive peak detection ($h = k_\sigma \hat{\sigma}$) with validation-tuned threshold, and local impedance mapping.
+   - **Conventional TDR (no ML):** robust noise estimate, edge detection with a median-difference step test, hard faults from the level after the edge relative to before it, soft faults from edge shape, load by DC de-embedding $Z_{in} = Z_0 L_{end}/(2-L_{end})$; all thresholds tuned on the validation split.
    - **LightGBM:** Four gradient boosted tree ensembles trained on 94 engineered physics features.
-   - **Multi-Task 1D-ResNet:** Deep residual architecture with convolutional stem, 4 residual stages (32, 64, 128, 256 channels), shared projection embedding, and 4 task heads optimized via a physics-masked multi-task loss.
+   - **Multi-Task 1D-ResNet:** convolutional stem, 4 residual stages (32, 64, 128, 128 channels), flattened $128\times64$ feature map (keeps time position for location) projected to a 256-d shared embedding, and 4 task heads trained with a physics-masked multi-task loss (AdamW, warm-up + cosine, mixed precision on GPU, fresh noise every batch).
 
 ---
 
@@ -66,7 +66,7 @@ EM_WAVES_PROJECT/
 ├── 5_make_figures.py           # Publication-grade figure generator (all 16 figures)
 ├── run_all.py                  # Master pipeline orchestrator (--mode quick/full, --device cpu/cuda)
 ├── app.py                      # Interactive Streamlit application (simulation and CSV upload)
-├── tests.py                    # 13 comprehensive physics, simulator, and network unit tests
+├── tests.py                    # 15 physics, simulator, pipeline and baseline-acceptance tests
 ├── kaggle_run.ipynb            # Self-contained notebook to run full training on Kaggle GPU
 ├── data/
 │   ├── README.md               # Synthetic and real dataset documentation
@@ -104,7 +104,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-### 2. Run the Unit Test Suite (13 Tests)
+### 2. Run the Unit Test Suite (15 Tests)
 ```powershell
 pytest -q tests.py
 ```
@@ -121,7 +121,7 @@ This generates the quick dataset (4,500 samples), trains Conventional, LightGBM,
 streamlit run app.py
 ```
 - **Tab 1 (Interactive Simulation):** Configure cable length, $Z_0$, loss, rise time, fault type/location/value, load type/values, and SNR. Plots the simulated trace with a dual distance/time axis, compares all three models, and displays ResNet class probabilities.
-- **Tab 2 (Upload CSV):** Upload a raw field TDR trace (`time_s,voltage_v` or `Time(us),Amplitude(mV)`) for automatic resampling and real-time diagnosis.
+- **Tab 2 (Upload CSV):** Upload a step-type TDR trace (`time_s,voltage_v` or `Time(us),Amplitude(mV)`) for automatic resampling and diagnosis. The models are trained on step responses; pulse-type records (such as WISE-CASING) are out of their domain.
 
 ---
 
@@ -144,30 +144,31 @@ To train on the full 85,000-sample dataset across multiple seeds:
    - Cell 5: Executes `python run_all.py --mode full --device cuda --skip-existing`.
    - Cell 6: Compresses outputs into `/kaggle/working/outputs.zip` and prints key metrics.
 6. Download `outputs.zip` from Kaggle and unzip it into your local repository root to restore full model weights, tables, and figures in place:
-   ```powershell
-   Expand-Archive -Path outputs.zip -DestinationPath . -Force
    ```
+   tar -xf outputs.zip
+   ```
+   (PowerShell alternative: `Expand-Archive -Path outputs.zip -DestinationPath . -Force`)
 
-**Estimated Full Run Time on Kaggle:**
-- Dataset Generation (85k samples): ~5.4 minutes
-- LightGBM Training (4 models $\times$ 4 seeds): ~12 minutes
-- ResNet1D Training (100 epochs, early stopping, 4 seeds + ablations): ~1.8 hours
-- Evaluation Suite & Figures: ~6 minutes
-- **Total Estimated Run Time:** ~2.1 hours (well within Kaggle's 12-hour limit).
+**Full run on Kaggle (estimate; the measured per-stage wall-clock is written to `results/timings.json`):**
+- Dataset generation (85k samples): a few minutes
+- LightGBM: 3 seeds + 4 learning-curve runs, features computed in parallel and cached: ~30–60 min
+- ResNet1D: 3 seeds + 4 learning-curve + 5 ablation runs, ≤40 epochs each with early stopping, on-GPU noise/preprocessing: ~1–1.5 h on a T4
+- Evaluation (E1–E8) and figures: ~10 min
+- **Total:** roughly 2–3 hours, well within Kaggle's 12-hour limit.
 
 ---
 
 ## 6. Experimental Results Summary
 
-The main benchmark results under 30 dB SNR are summarized below (from `results/tables/main_comparison.md`):
+Main comparison on the test split at 30 dB SNR (`results/tables/main_comparison.md`, generated by `4_evaluate.py`):
 
-| Model | Fault Acc (%) | Fault Macro-F1 | Loc MAE (m) | Loc Median (m) | Loc P90 (m) | Loc <1m (%) | Load Acc (%) | Load Macro-F1 | MAPE R (%) | MAPE L (%) | MAPE C (%) |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Conventional TDR** | 27.40% | 0.2270 | 16.39 m | 3.43 m | 54.16 m | 39.3% | 23.74% | 0.1986 | 56.5% | 215.4% | 447.6% |
-| **LightGBM (94 Features)** | **70.40%** | **0.7075** | **9.32 m** | **2.12 m** | **30.01 m** | 33.3% | **87.15%** | **0.8721** | 361.4% | **46.3%** | **148.0%** |
-| **Multi-Task ResNet1D** | 48.60% | 0.4442 | 20.19 m | 13.56 m | 48.32 m | 4.2% | 54.19% | 0.5151 | 237.7% | 264.7% | 164.4% |
+| Model               |   Fault Acc (%) |   Fault Macro-F1 |   Loc MAE (m) |   Loc Median (m) |   Loc P90 (m) |   Loc <1m (%) |   Load Acc (%) |   Load Macro-F1 |   MAPE R (%) |   MAPE L (%) |   MAPE C (%) |
+|:--------------------|----------------:|-----------------:|--------------:|-----------------:|--------------:|--------------:|---------------:|----------------:|-------------:|-------------:|-------------:|
+| Conventional TDR    |            62.2 |           0.6114 |          9.34 |             0.96 |         36.68 |          50.8 |          78.21 |          0.7949 |         34.1 |        169.5 |        139.2 |
+| LightGBM            |            69.8 |           0.7026 |          9.32 |             2.12 |         30.01 |          33.3 |          85.2  |          0.8525 |         19.7 |         26   |         50.9 |
+| Multi-Task ResNet1D |            56.8 |           0.5532 |         19.79 |            14.98 |         44.48 |           3   |          65.08 |          0.6412 |        110.3 |         53.1 |         89.5 |
 
-*(Note: Table reflects quick-mode smoke test run. Final full-training metrics on Kaggle GPU will yield significantly higher classification accuracy and sub-metre localization precision across all tasks).*
+*These numbers are from the **quick** smoke-test run (3,000 training samples, 3 epochs) and only show that the pipeline works; they are replaced by the full Kaggle run (60,000 samples, 3 seeds, mean ± std). Detection limit vs reflection strength: `results/tables/recall_vs_gamma.md`. Real-data physics check: `results/tables/real_data.md`.*
 
 ---
 
@@ -176,13 +177,10 @@ The main benchmark results under 30 dB SNR are summarized below (from `results/t
 ### Synthetic Dataset
 Full dataset specifications and parameter distributions are documented in [`data/dataset_card.md`](data/dataset_card.md). All random number generators (NumPy and PyTorch) are strictly seeded from `config.yaml`. Running the pipeline with identical seeds produces byte-identical traces and reproducible metrics.
 
-### Real Laboratory Dataset: NREL WISE-CASING
-- **Dataset:** *WISE-CASING: Time Domain Reflectometry Data from Lab Experiment on Coaxial Cable*
-- **Sponsor / Host:** U.S. Department of Energy (DOE) Geothermal Data Repository (GDR), Submission 1164.
-- **Permanent DOI:** [10.15121/1559012](https://doi.org/10.15121/1559012) / OSTI ID 1559012
-- **Authors:** Yuxin Wu, Jiannan Wang (Lawrence Berkeley National Laboratory).
-- **Licence:** Creative Commons Attribution / Public Domain (U.S. Government work).
-- **Physical Specifications:** 85 m RG-85 coaxial cable with calibrated $120^\circ$ shield cutaway damage at $d = 40$ m, alongside 20 m, 10 m, and 5 m benchmark traces.
+### Real Laboratory Dataset: WISE-CASING (physics check)
+- **Citation:** Y. Wu and J. Wang (Lawrence Berkeley National Laboratory), *WISE-CASING: Time Domain Reflectometry Data from Lab Experiment on Coaxial Cable*, Geothermal Data Repository, submission 1164, 2018. DOI [10.15121/1559012](https://doi.org/10.15121/1559012). Licence and terms: see <https://gdr.openei.org/submissions/1164>.
+- **Documented setup:** 80 m RG-85 coax, shorted termination, undamaged and with a 120° shield cutaway at 40 m; plus records documented as 20 / 10 / 5 m cables (verbatim quotes in `data/real/wise_casing/labels.yaml`).
+- **How it is used (E8):** the records are *pulse-type* TDR, not step responses, so the step-trained models are not applied. Instead `tdr.data.analyse_real_wise_casing` measures echo round-trip times, estimates the velocity factor from the undamaged 80 m record, and locates the cutaway by echo-time ratio. On the quick run this gives vf ≈ 0.64 and a cutaway estimate of 38.5 m (documented: 40 m). The 20 / 10 / 5 m records' echo times are inconsistent with their documented lengths and are flagged. See `data/README.md`, `results/tables/real_data.md` and `figures/fig_real_data.png`.
 
 ---
 

@@ -103,22 +103,32 @@ Fig.~\ref{fig:shap} depicts the global SHAP feature importance for the LightGBM 
 \label{fig:shap}
 \end{figure}
 
-\subsection{E8: Empirical Validation on Laboratory TDR Measurements}
-Table~\ref{tab:real_data} summarizes zero-shot inference on physical coaxial cable measurements from the NREL WISE-CASING dataset \cite{nrel_wise_casing}. Fig.~\ref{fig:real_data} displays the normalized experimental waveforms annotated with true and predicted discontinuity locations.
+\subsection{E8: Physical Consistency on Laboratory TDR Records}
+\label{sec:real_results}
+Table~\ref{tab:real_data} lists the measured round-trip times of the strongest echo in each WISE-CASING record \cite{nrel_wise_casing}; Table~\ref{tab:real_loc} gives the damage localisation by echo-time ratio, and Fig.~\ref{fig:real_data} shows the records with the measured and expected echoes. % TODO (Prompt 2): discuss vf_est, localisation error, echo polarity of the cutaway, and the inconsistent 5/10/20 m records.
 
 \begin{table*}[t]
 \centering
-\caption{Zero-Shot Empirical Evaluation on Real NREL WISE-CASING Coaxial Cable Measurements.}
+\caption{Echo timing on the WISE-CASING laboratory records (pulse-type TDR; no ML applied).}
 \label{tab:real_data}
 \resizebox{\textwidth}{!}{
 \input{tables/real_data.tex}
 }
 \end{table*}
 
+\begin{table}[t]
+\centering
+\caption{Localisation of the 40~m shield cutaway from echo-time ratio.}
+\label{tab:real_loc}
+\resizebox{\columnwidth}{!}{
+\input{tables/real_damage_localisation.tex}
+}
+\end{table}
+
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{fig_real_data.pdf}
-\caption{Zero-shot model predictions on real experimental TDR traces from the NREL WISE-CASING dataset, showing clean resolution of the 40~m shield cutaway.}
+\caption{WISE-CASING pulse-TDR records with the incident pulse peak, the strongest measured echo, and the echo times expected from the documented geometry at the velocity factor estimated from the undamaged 80~m record.}
 \label{fig:real_data}
 \end{figure*}
 

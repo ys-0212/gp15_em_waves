@@ -526,124 +526,155 @@ class TDRDataset(Dataset):
         }
 
 
+class TensorTDRData:
+    """Whole split held as tensors on one device; batches are preprocessed on that device.
+
+    Replaces per-sample preprocessing inside a DataLoader (CPU-bound) for training.
+    Uses exactly the same target encoding as TDRDataset and the same preprocess().
+    """
+
+    TARGET_KEYS = ("fault_cls", "fault_pos", "load_cls", "load_reg", "mask_loc", "mask_load")
+
+    def __init__(
+        self,
+        h5_path: Path,
+        meta_path: Path,
+        device: torch.device,
+        indices: Optional[np.ndarray] = None,
+    ):
+        base = TDRDataset(h5_path, meta_path, cached_noise=False)
+        sel = np.arange(len(base)) if indices is None else np.asarray(indices)
+        self.device = device
+        self.clean = torch.from_numpy(base.clean_traces[sel]).to(device)
+        self.v_inc = torch.from_numpy(base.v_inc[sel]).to(device)
+        self.targets = {
+            "fault_cls": torch.from_numpy(base.fault_cls[sel]).to(device),
+            "fault_pos": torch.from_numpy(base.fault_pos[sel]).to(device),
+            "load_cls": torch.from_numpy(base.load_cls[sel]).to(device),
+            "load_reg": torch.from_numpy(base.load_reg[sel]).to(device),
+            "mask_loc": torch.from_numpy(base.mask_loc[sel]).to(device),
+            "mask_load": torch.from_numpy(base.mask_load[sel]).to(device),
+        }
+        self.meta_df = base.meta_df.iloc[sel].reset_index(drop=True)
+        self.n = len(sel)
+        self.fixed_inputs: Optional[torch.Tensor] = None
+
+    def fix_noise(self, snr_db: float, seed: int) -> None:
+        """Freeze one noisy copy (for validation) using the numpy reference path."""
+        x = preprocess_numpy(self.clean.cpu().numpy(), self.v_inc.cpu().numpy(),
+                             snr_db=snr_db, seed=seed, add_noise=True)
+        self.fixed_inputs = torch.from_numpy(x).to(self.device)
+
+    def batches(
+        self,
+        batch_size: int,
+        shuffle: bool,
+        perm_generator: Optional[torch.Generator] = None,
+        noise_generator: Optional[torch.Generator] = None,
+    ):
+        """Yield (x [B,3,1024], targets dict). Fresh U[20,50] dB noise unless fix_noise() was called."""
+        if shuffle:
+            order = torch.randperm(self.n, generator=perm_generator).to(self.device)
+        else:
+            order = torch.arange(self.n, device=self.device)
+        for start in range(0, self.n, batch_size):
+            idx = order[start:start + batch_size]
+            if self.fixed_inputs is not None:
+                x = self.fixed_inputs[idx]
+            else:
+                x = preprocess(self.clean[idx], self.v_inc[idx], snr_db=None,
+                               generator=noise_generator, add_noise=True, device=self.device)
+            yield x, {k: v[idx] for k, v in self.targets.items()}
+
+
 # =========================================================================
 # Real Data Loader: WISE-CASING (NREL / LBNL)
 # =========================================================================
 
-def load_real_wise_casing(
-    data_dir: Union[str, Path] = "data/real/wise_casing",
-    n_points: int = 1024,
-) -> Dict[str, Any]:
-    """Loads and resamples experimental TDR traces from the NREL WISE-CASING dataset.
+def load_real_wise_casing(data_dir: Union[str, Path] = "data/real/wise_casing") -> Dict[str, Any]:
+    """Load the raw WISE-CASING pulse-TDR records and their documentation (labels.yaml).
 
-    Converts raw amplitude (mV) vs time (us) to our standard convention:
-    - Normalized time t/T_nom in [0, 2.5) with 1024 points
-    - Incident edge aligned to t/T_nom = 0.05
-    - Normalized voltage v_tilde = 1.0 at incident plateau
-    - Generates 3-channel input tensor [v_tilde, d(v_tilde)/dt, t/T]
-
-    Args:
-        data_dir: Path to directory containing WISE-CASING CSVs and labels.yaml.
-        n_points: Number of resampled points along the time axis (default 1024).
-
-    Returns:
-        Dictionary with keys:
-        - "traces": np.ndarray of shape [N, 1024]
-        - "inputs": torch.Tensor of shape [N, 3, 1024]
-        - "meta": pd.DataFrame containing metadata and labels
-        - "labels_yaml": raw dictionary from labels.yaml
+    Returns {"labels": dict, "traces": {filename: (t_us, v_mV)}}. No resampling or
+    normalisation: these are pulse-type records, not step responses (see labels.yaml).
     """
     data_dir = Path(data_dir)
-    labels_file = data_dir / "labels.yaml"
-    if not labels_file.exists():
-        raise FileNotFoundError(f"labels.yaml not found at {labels_file}")
+    with open(data_dir / "labels.yaml", "r", encoding="utf-8") as f:
+        labels = yaml.safe_load(f)
+    traces = {}
+    for fname in labels.get("traces", {}):
+        path = data_dir / fname
+        if path.exists():
+            df = pd.read_csv(path)
+            traces[fname] = (df.iloc[:, 0].to_numpy(np.float64), df.iloc[:, 1].to_numpy(np.float64))
+    return {"labels": labels, "traces": traces}
 
-    with open(labels_file, "r") as f:
-        meta_dict = yaml.safe_load(f)
 
-    traces_dict = meta_dict.get("traces", {})
-    vf_val = meta_dict.get("nominal_velocity_factor", 0.66)
-    vf = float(0.66 if vf_val in ("unknown", None) else vf_val)
-    u = vf * C_CONST
+def analyse_real_wise_casing(
+    data_dir: Union[str, Path] = "data/real/wise_casing",
+    vf_nominal: float = 0.66,
+    min_gap_us: float = 0.08,
+) -> Dict[str, Any]:
+    """Physics consistency check on the real pulse-TDR records (no ML).
 
-    t_norm_grid = np.linspace(0.0, 2.5 * (n_points - 1) / n_points, n_points, dtype=np.float32)
-
+    For each record: t0 = incident pulse peak (largest positive sample before 0.12 us);
+    echo = largest |v| at t > t0 + min_gap_us; dt = t_echo - t0 (round trip).
+      * implied vf from the documented length: vf = 2 L / (c dt)
+      * vf_est from the undamaged 80 m reference trace
+      * damage location by echo-time ratio (velocity-free): d = L * dt_damage / dt_ref
+      * a record is "consistent" if its implied vf is within 10% of vf_est
+    Echo polarity gives the sign of the reflection coefficient (short -> negative).
+    """
+    raw = load_real_wise_casing(data_dir)
+    labels, traces = raw["labels"], raw["traces"]
+    ref = labels.get("reference_trace")
     rows = []
-    norm_traces = []
-
-    for fname, info in traces_dict.items():
-        csv_path = data_dir / fname
-        if not csv_path.exists():
+    for fname, info in labels["traces"].items():
+        if fname not in traces:
             continue
-
-        df = pd.read_csv(csv_path)
-        t_us = df["Time(us)"].values.astype(np.float64)
-        v_mv = df["Amplitude(mV)"].values.astype(np.float64)
-
-        t_s = t_us * 1e-6
-        v_v = v_mv * 1e-3
-
-        l_m = float(info["cable_length_m"])
-        t_inc_s = float(info.get("incident_edge_time_us", 0.05)) * 1e-6
-        t_nom_s = 2.0 * l_m / u
-
-        # Resample grid to raw time
-        t_raw_target = t_inc_s + (t_norm_grid - 0.05) * t_nom_s
-
-        # Baseline before incident edge
-        pre_mask = t_s < (t_inc_s - 0.01e-6)
-        v_base = np.median(v_v[pre_mask]) if np.any(pre_mask) else v_v[0]
-
-        # Incident plateau shortly after launch
-        post_mask = (t_s > t_inc_s + 0.01e-6) & (t_s < t_inc_s + min(0.3 * t_nom_s, 0.4e-6))
-        v_plat = np.median(v_v[post_mask]) if np.any(post_mask) else v_v[-1]
-
-        # Normalize so baseline -> 0.0, incident plateau -> 1.0
-        delta = v_plat - v_base
-        if abs(delta) < 1e-3:
-            v_norm = (v_v - v_base)
-        elif delta > 0:
-            v_norm = (v_v - v_base) / delta
-        else:
-            # Negative-going pulse from instrument
-            v_norm = (v_base - v_v) / abs(delta)
-
-        v_resampled = np.interp(t_raw_target, t_s, v_norm, left=0.0, right=v_norm[-1]).astype(np.float32)
-        norm_traces.append(v_resampled)
-
-        f_type = info.get("fault_type", "none")
-        l_type = info.get("load_type", "short")
-        f_loc = info.get("fault_location_m")
-        f_pos_frac = (float(f_loc) / l_m) if f_loc is not None else None
-
+        t, v = traces[fname]
+        early = t < 0.12
+        i0 = int(np.argmax(np.where(early, v, -np.inf)))
+        t0 = float(t[i0])
+        late = t > t0 + min_gap_us
+        k = int(np.argmax(np.where(late, np.abs(v), -np.inf)))
+        dt_us = float(t[k] - t0)
+        L = float(info["cable_length_m"])
         rows.append({
-            "filename": fname,
-            "cable_length_m": l_m,
-            "fault_type": f_type,
-            "fault_class_id": FAULT_TO_ID.get(f_type, 0),
-            "fault_pos_m": f_loc,
-            "fault_pos_frac": f_pos_frac,
-            "load_type": l_type,
-            "load_class_id": LOAD_TO_ID.get(l_type, 1),
-            "description": info.get("description", ""),
-            "t_nom_s": t_nom_s,
+            "file": fname,
+            "resource": info.get("resource_name", ""),
+            "documented_length_m": L,
+            "documented_damage_m": (info.get("damage") or {}).get("location_m"),
+            "t0_us": t0,
+            "t_echo_us": float(t[k]),
+            "echo_polarity": "negative" if v[k] < 0 else "positive",
+            "echo_amplitude_rel": float(v[k] / max(v[i0], 1e-9)),
+            "round_trip_us": dt_us,
+            "implied_vf": 2.0 * L / (C_CONST * dt_us * 1e-6),
         })
+    df = pd.DataFrame(rows)
+    out: Dict[str, Any] = {"table": df, "raw": traces, "labels": labels}
+    if ref in set(df["file"]):
+        r = df[df["file"] == ref].iloc[0]
+        vf_est = float(r["implied_vf"])
+        df["distance_at_vf_est_m"] = vf_est * C_CONST * df["round_trip_us"] * 1e-6 / 2.0
+        cons = (np.abs(df["implied_vf"] - vf_est) / vf_est) < 0.10
+        # For a damaged record the strongest echo is the damage, not the termination,
+        # so the length-based consistency test does not apply.
+        df["consistent_with_vf_est"] = np.where(df["documented_damage_m"].notna(), None, cons)
+        dmg = df[df["documented_damage_m"].notna()]
+        loc = []
+        for _, d in dmg.iterrows():
+            d_ratio = float(r["documented_length_m"]) * d["round_trip_us"] / float(r["round_trip_us"])
+            loc.append({
+                "file": d["file"],
+                "documented_damage_m": float(d["documented_damage_m"]),
+                "estimated_by_time_ratio_m": d_ratio,
+                "estimated_at_vf_nominal_m": vf_nominal * C_CONST * d["round_trip_us"] * 1e-6 / 2.0,
+                "error_m": d_ratio - float(d["documented_damage_m"]),
+                "echo_polarity": d["echo_polarity"],
+            })
+        out.update({"vf_est": vf_est, "damage_localisation": loc})
+    out["table"] = df
+    return out
 
-    if not norm_traces:
-        raise ValueError(f"No valid CSV traces found in {data_dir}")
 
-    traces_arr = np.stack(norm_traces, axis=0)  # [N, 1024]
-    meta_df = pd.DataFrame(rows)
-
-    # Convert to 3-channel input tensor [N, 3, 1024] using preprocess()
-    # Note: v_resampled is already normalized to incident plateau = 1.0, so v_inc = 1.0
-    clean_t = torch.from_numpy(traces_arr)
-    v_inc_t = torch.ones(len(traces_arr), dtype=torch.float32)
-    inputs_t = preprocess(clean_t, v_inc_t, add_noise=False)
-
-    return {
-        "traces": traces_arr,
-        "inputs": inputs_t,
-        "meta": meta_df,
-        "labels_yaml": meta_dict,
-    }

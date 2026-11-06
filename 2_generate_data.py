@@ -23,7 +23,7 @@ def generate_all_splits(
     out_dir: Path = Path("data"),
     debug_dir: Path = Path("results/debug"),
 ):
-    with open(cfg_path, "r") as f:
+    with open(cfg_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     out_dir = Path(out_dir)
@@ -207,7 +207,7 @@ def write_dataset_card(
         "- **Fault Position d/l**: 0.10 – 0.95 (OOD near_load: 0.3 m – 3.0 m from load)",
     ])
 
-    with open(card_path, "w") as f:
+    with open(card_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"Dataset card written to {card_path}")
 

@@ -1,0 +1,43 @@
+method,fault_class,gamma_bin,n,detected_pct,correct_pct
+Conventional TDR,shunt_R,"[0.00, 0.05)",27,11.11111111111111,3.7037037037037033
+Conventional TDR,shunt_R,"[0.05, 0.10)",9,22.22222222222222,22.22222222222222
+Conventional TDR,shunt_R,"[0.10, 0.20)",9,77.77777777777779,77.77777777777779
+Conventional TDR,shunt_R,"[0.20, 0.40)",6,100.0,100.0
+Conventional TDR,shunt_R,"[0.40, 1.00)",23,100.0,65.21739130434783
+Conventional TDR,series_R,"[0.00, 0.05)",23,13.043478260869565,8.695652173913043
+Conventional TDR,series_R,"[0.05, 0.10)",13,15.384615384615385,15.384615384615385
+Conventional TDR,series_R,"[0.10, 0.20)",14,85.71428571428571,85.71428571428571
+Conventional TDR,series_R,"[0.20, 0.40)",17,100.0,100.0
+Conventional TDR,series_R,"[0.40, 1.00)",15,100.0,93.33333333333333
+Conventional TDR,shunt_C,all (frequency dependent),68,70.58823529411765,35.294117647058826
+Conventional TDR,z0_section,"[0.00, 0.05)",3,33.33333333333333,0.0
+Conventional TDR,z0_section,"[0.05, 0.10)",26,26.923076923076923,19.230769230769234
+Conventional TDR,z0_section,"[0.10, 0.20)",32,43.75,21.875
+LightGBM,shunt_R,"[0.00, 0.05)",27,55.55555555555556,22.22222222222222
+LightGBM,shunt_R,"[0.05, 0.10)",9,88.88888888888889,77.77777777777779
+LightGBM,shunt_R,"[0.10, 0.20)",9,100.0,100.0
+LightGBM,shunt_R,"[0.20, 0.40)",6,100.0,100.0
+LightGBM,shunt_R,"[0.40, 1.00)",23,100.0,86.95652173913044
+LightGBM,series_R,"[0.00, 0.05)",23,52.17391304347826,8.695652173913043
+LightGBM,series_R,"[0.05, 0.10)",13,100.0,84.61538461538461
+LightGBM,series_R,"[0.10, 0.20)",14,100.0,92.85714285714286
+LightGBM,series_R,"[0.20, 0.40)",17,100.0,100.0
+LightGBM,series_R,"[0.40, 1.00)",15,100.0,100.0
+LightGBM,shunt_C,all (frequency dependent),68,86.76470588235294,51.470588235294116
+LightGBM,z0_section,"[0.00, 0.05)",3,33.33333333333333,0.0
+LightGBM,z0_section,"[0.05, 0.10)",26,30.76923076923077,26.923076923076923
+LightGBM,z0_section,"[0.10, 0.20)",32,71.875,50.0
+Multi-Task ResNet1D,shunt_R,"[0.00, 0.05)",27,74.07407407407408,11.11111111111111
+Multi-Task ResNet1D,shunt_R,"[0.05, 0.10)",9,55.55555555555556,44.44444444444444
+Multi-Task ResNet1D,shunt_R,"[0.10, 0.20)",9,100.0,88.88888888888889
+Multi-Task ResNet1D,shunt_R,"[0.20, 0.40)",6,100.0,100.0
+Multi-Task ResNet1D,shunt_R,"[0.40, 1.00)",23,100.0,52.17391304347826
+Multi-Task ResNet1D,series_R,"[0.00, 0.05)",23,56.52173913043478,26.08695652173913
+Multi-Task ResNet1D,series_R,"[0.05, 0.10)",13,100.0,30.76923076923077
+Multi-Task ResNet1D,series_R,"[0.10, 0.20)",14,100.0,71.42857142857143
+Multi-Task ResNet1D,series_R,"[0.20, 0.40)",17,94.11764705882352,82.35294117647058
+Multi-Task ResNet1D,series_R,"[0.40, 1.00)",15,100.0,100.0
+Multi-Task ResNet1D,shunt_C,all (frequency dependent),68,58.82352941176471,22.058823529411764
+Multi-Task ResNet1D,z0_section,"[0.00, 0.05)",3,100.0,66.66666666666666
+Multi-Task ResNet1D,z0_section,"[0.05, 0.10)",26,65.38461538461539,34.61538461538461
+Multi-Task ResNet1D,z0_section,"[0.10, 0.20)",32,53.125,12.5

@@ -52,7 +52,7 @@ def load_deployment_models(weights_dir: Union[str, Path] = "app/weights") -> Dic
     # 1. Weights metadata
     meta_path = weights_dir / "weights_meta.json"
     if meta_path.exists():
-        with open(meta_path, "r") as f:
+        with open(meta_path, "r", encoding="utf-8") as f:
             models["meta"] = json.load(f)
     else:
         models["meta"] = {"mode": "unknown"}
@@ -60,11 +60,11 @@ def load_deployment_models(weights_dir: Union[str, Path] = "app/weights") -> Dic
     # 2. Conventional baseline
     conv_path = weights_dir / "conventional.json"
     if conv_path.exists():
-        with open(conv_path, "r") as f:
+        with open(conv_path, "r", encoding="utf-8") as f:
             cfg_c = json.load(f)
-        models["conventional"] = ConventionalTDR(k_sigma=cfg_c.get("k_sigma", 4.0))
+        models["conventional"] = ConventionalTDR.from_dict(cfg_c)
     else:
-        models["conventional"] = ConventionalTDR(k_sigma=4.0)
+        models["conventional"] = ConventionalTDR()
 
     # 3. LightGBM
     lgbm = LGBMSuite()
@@ -87,7 +87,7 @@ def load_deployment_models(weights_dir: Union[str, Path] = "app/weights") -> Dic
             models["resnet"] = resnet
 
             if norm_path.exists():
-                with open(norm_path, "r") as f:
+                with open(norm_path, "r", encoding="utf-8") as f:
                     models["resnet_norm"] = json.load(f)
             else:
                 models["resnet_norm"] = {"mean": [0.5, 0.0, 0.5], "std": [0.5, 0.1, 0.5]}
@@ -152,7 +152,7 @@ def predict_trace(
     # 1. Conventional TDR
     conv = models.get("conventional")
     if conv is not None:
-        raw_pred = conv.predict_single(preprocessed_np[0])
+        raw_pred = conv.predict_single(preprocessed_np[0], length_m=length_m)
         pred_d_m = raw_pred["fault_pos_frac"] * length_m if raw_pred["detected"] else None
         # Derive L or C
         tau_s = raw_pred["load_tau_over_T"] * t_nom

@@ -32,3 +32,15 @@ outputs.zip
 !app/weights/
 !report/
 
+
+# feature cache (regenerable)
+data/cache/
+
+# LaTeX build artifacts
+report/*.aux
+report/*.log
+report/*.bbl
+report/*.blg
+report/*.out
+report/*.pdf
+!report/report.pdf

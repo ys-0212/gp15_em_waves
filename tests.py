@@ -496,7 +496,7 @@ def test_determinism():
     from tdr.data import sample_batch_params
     from tdr.simulator import simulate_batch
 
-    with open("config.yaml", "r") as f:
+    with open("config.yaml", "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     seed = 42
@@ -730,3 +730,41 @@ def test_encode_decode_path():
     dec_tau = decode_load_tau(enc_tau)
     mape_tau = np.mean(np.abs(dec_tau - true_tau) / true_tau) * 100.0
     assert mape_tau < 1e-6, f"MAPE on tau encode/decode failed: {mape_tau:.2e}%"
+
+
+# =========================================================================
+# Test 15: Conventional TDR acceptance (physics-limit aware)
+# =========================================================================
+def test_conventional_acceptance():
+    """Rule-based baseline on a seeded generated set at 40 dB.
+
+    * strong soft faults (shunt_R / series_R with |Gamma| >= 0.2) are detected and
+      classified correctly (no ML needed for these),
+    * weak soft faults (|Gamma| < 0.6) are never mistaken for hard short/open faults,
+    * hard faults are recognised.
+    """
+    import yaml
+    from tdr.data import sample_batch_params, preprocess_numpy
+    from tdr.simulator import simulate_batch
+    from tdr.features import ConventionalTDR
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+    rng = np.random.default_rng(2024)
+    params, meta = sample_batch_params(700, rng, cfg)
+    _, traces = simulate_batch(params, n_sim=cfg["signal"]["n_sim"], n_out=cfg["signal"]["n_out"])
+    x = preprocess_numpy(traces, meta["v_inc"].values, snr_db=40.0, seed=7, add_noise=True)
+    pred = np.array([p["fault_class"] for p in ConventionalTDR().predict_batch(x, meta["length_m"].values)])
+    true = meta["fault_class"].values
+    g = np.abs(meta["fault_gamma_nominal"].values)
+
+    strong = np.isin(true, ["shunt_R", "series_R"]) & (g >= 0.2)
+    assert strong.sum() > 30
+    assert np.mean(pred[strong] != "none") >= 0.90
+    assert np.mean(pred[strong] == true[strong]) >= 0.75
+
+    weak_soft = np.isin(true, ["shunt_R", "series_R", "shunt_C", "z0_section"]) & ~(g >= 0.6)
+    assert np.mean(np.isin(pred[weak_soft], ["short", "open"])) <= 0.05
+
+    for hard in ["short", "open"]:
+        assert np.mean(pred[true == hard] == hard) >= 0.80

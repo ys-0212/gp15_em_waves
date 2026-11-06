@@ -14,6 +14,7 @@ import h5py
 import matplotlib as mpl
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+from tdr.simulator import C_CONST
 import numpy as np
 import pandas as pd
 import yaml
@@ -57,8 +58,8 @@ def save_fig(fig: plt.Figure, base_name: str, fig_dir: Path, report_fig_dir: Pat
     pdf_path = fig_dir / f"{base_name}.pdf"
 
     fig.tight_layout()
-    fig.savefig(png_path, dpi=300)
-    fig.savefig(pdf_path, dpi=300)
+    fig.savefig(png_path, dpi=300, bbox_inches="tight")
+    fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
     shutil.copy2(pdf_path, report_fig_dir / f"{base_name}.pdf")
     plt.close(fig)
     print(f"  Saved {base_name} (PNG & PDF)")
@@ -302,58 +303,44 @@ def make_fig_hard_case(fig_dir: Path, rep_dir: Path):
 # Figure 8: Confusion Matrices (Fault and Load)
 # =========================================================================
 def make_fig_confusion_matrices(fig_dir: Path, rep_dir: Path):
-    results_dir = Path("results/runs")
-    methods = [("Conventional", "conventional"), ("LightGBM", "lgbm_s0"), ("ResNet1D", "resnet_s0")]
+    """Row-normalised TEST-set confusion matrices (30 dB, seed 0) for the three methods."""
+    tm_path = Path("results/experiments/test_metrics_s0.json")
+    if not tm_path.exists():
+        print("test_metrics_s0.json not found (run 4_evaluate.py). Skipping confusion matrices.")
+        return
+    with open(tm_path, "r", encoding="utf-8") as f:
+        tm = json.load(f)
+    methods = [(n, k) for n, k in [("Conventional", "conventional"), ("LightGBM", "lgbm"), ("ResNet1D", "resnet")] if k in tm]
 
-    # 8a: Fault confusion matrix
-    fig_f, axes_f = plt.subplots(1, 3, figsize=(13, 4))
-    for i, (name, r_id) in enumerate(methods):
-        m_path = results_dir / r_id / "metrics.json"
-        if not m_path.exists():
-            continue
-        with open(m_path, "r") as f:
-            m = json.load(f)
-        cm = np.array(m["t1_fault"]["confusion_matrix"])
-        cm_norm = cm.astype(float) / np.maximum(1, cm.sum(axis=1, keepdims=True))
-        im = axes_f[i].imshow(cm_norm, cmap="Blues", vmin=0, vmax=1)
-        axes_f[i].set_title(f"{name} (Acc: {m['t1_fault']['accuracy']*100:.1f}%)")
-        axes_f[i].set_xticks(range(len(FAULT_CLASSES)))
-        axes_f[i].set_yticks(range(len(FAULT_CLASSES)))
-        axes_f[i].set_xticklabels(FAULT_CLASSES, rotation=45, ha="right", fontsize=7.5)
-        if i == 0:
-            axes_f[i].set_yticklabels(FAULT_CLASSES, fontsize=7.5)
-            axes_f[i].set_ylabel("True Fault")
-        else:
-            axes_f[i].set_yticklabels([])
-        axes_f[i].set_xlabel("Predicted Fault")
-
-    fig_f.colorbar(im, ax=axes_f, orientation="horizontal", fraction=0.05, pad=0.25, label="Recall Proportion")
-    save_fig(fig_f, "fig_confusion_fault", fig_dir, rep_dir)
-
-    # 8b: Load confusion matrix
-    fig_l, axes_l = plt.subplots(1, 3, figsize=(12, 4))
-    for i, (name, r_id) in enumerate(methods):
-        m_path = results_dir / r_id / "metrics.json"
-        if not m_path.exists():
-            continue
-        with open(m_path, "r") as f:
-            m = json.load(f)
-        cm = np.array(m["t3_load"]["confusion_matrix"])
-        cm_norm = cm.astype(float) / np.maximum(1, cm.sum(axis=1, keepdims=True))
-        im_l = axes_l[i].imshow(cm_norm, cmap="Greens", vmin=0, vmax=1)
-        axes_l[i].set_title(f"{name} (Acc: {m['t3_load']['accuracy']*100:.1f}%)")
-        axes_l[i].set_xticks(range(len(LOAD_CLASSES)))
-        axes_l[i].set_yticks(range(len(LOAD_CLASSES)))
-        axes_l[i].set_xticklabels(LOAD_CLASSES, rotation=45, ha="right", fontsize=8)
-        if i == 0:
-            axes_l[i].set_yticklabels(LOAD_CLASSES, fontsize=8)
-            axes_l[i].set_ylabel("True Load")
-        else:
-            axes_l[i].set_yticklabels([])
-        axes_l[i].set_xlabel("Predicted Load")
-
-    fig_l.colorbar(im_l, ax=axes_l, orientation="horizontal", fraction=0.05, pad=0.25, label="Recall Proportion")
-    save_fig(fig_l, "fig_confusion_load", fig_dir, rep_dir)
+    for task, classes, cmap, base, ylab in [
+        ("t1_fault", FAULT_CLASSES, "Blues", "fig_confusion_fault", "True fault"),
+        ("t3_load", LOAD_CLASSES, "Greens", "fig_confusion_load", "True load"),
+    ]:
+        fig = plt.figure(figsize=(4.2 * len(methods) + 0.8, 4.6))
+        gs = fig.add_gridspec(1, len(methods) + 1, width_ratios=[1] * len(methods) + [0.05], wspace=0.08)
+        im = None
+        for i, (name, key) in enumerate(methods):
+            ax = fig.add_subplot(gs[0, i])
+            m = tm[key][task]
+            cm = np.array(m["confusion_matrix"], dtype=float)
+            cm_norm = cm / np.maximum(1.0, cm.sum(axis=1, keepdims=True))
+            im = ax.imshow(cm_norm, cmap=cmap, vmin=0, vmax=1)
+            for r in range(cm_norm.shape[0]):
+                for c in range(cm_norm.shape[1]):
+                    if cm_norm[r, c] >= 0.05:
+                        ax.text(c, r, f"{cm_norm[r, c]:.2f}", ha="center", va="center", fontsize=6.5,
+                                color="white" if cm_norm[r, c] > 0.55 else "black")
+            ax.set_title(f"{name} (acc {m['accuracy'] * 100:.1f}%)", fontsize=10)
+            ax.set_xticks(range(len(classes)))
+            ax.set_xticklabels(classes, rotation=45, ha="right", fontsize=7.5)
+            ax.set_yticks(range(len(classes)))
+            ax.set_yticklabels(classes if i == 0 else [], fontsize=7.5)
+            if i == 0:
+                ax.set_ylabel(ylab)
+            ax.set_xlabel("Predicted")
+        cax = fig.add_subplot(gs[0, -1])
+        fig.colorbar(im, cax=cax, label="Recall (row-normalised)")
+        save_fig(fig, base, fig_dir, rep_dir)
 
 
 # =========================================================================
@@ -363,7 +350,7 @@ def make_fig_loc_error_breakdowns(fig_dir: Path, rep_dir: Path):
     brk_path = Path("results/experiments/error_breakdowns.json")
     if not brk_path.exists():
         return
-    with open(brk_path, "r") as f:
+    with open(brk_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # 9a: Loc error vs position
@@ -396,7 +383,7 @@ def make_fig_noise_sweep(fig_dir: Path, rep_dir: Path):
     ns_path = Path("results/experiments/noise_sweep.json")
     if not ns_path.exists():
         return
-    with open(ns_path, "r") as f:
+    with open(ns_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     snrs = [float(s) for s in data["snrs"]]
@@ -437,7 +424,7 @@ def make_fig_ood(fig_dir: Path, rep_dir: Path):
     ood_path = Path("results/experiments/ood_results.json")
     if not ood_path.exists():
         return
-    with open(ood_path, "r") as f:
+    with open(ood_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     subsets = list(data.keys())
@@ -474,7 +461,7 @@ def make_fig_learning_curves(fig_dir: Path, rep_dir: Path):
     lc_path = Path("results/experiments/learning_curves.json")
     if not lc_path.exists():
         return
-    with open(lc_path, "r") as f:
+    with open(lc_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     fracs = [float(f) for f in data["fractions"]]
@@ -502,7 +489,7 @@ def make_fig_ablations(fig_dir: Path, rep_dir: Path):
     abl_path = Path("results/experiments/ablations.json")
     if not abl_path.exists():
         return
-    with open(abl_path, "r") as f:
+    with open(abl_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     labels = []
@@ -534,7 +521,7 @@ def make_fig_shap(fig_dir: Path, rep_dir: Path):
     shap_path = Path("results/experiments/shap_summary.json")
     if not shap_path.exists():
         return
-    with open(shap_path, "r") as f:
+    with open(shap_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     importances = np.array(data.get("top_feature_importances", []))
@@ -577,63 +564,42 @@ def make_fig_training_curves(fig_dir: Path, rep_dir: Path):
 # Figure 16: Real Data Trace Predictions
 # =========================================================================
 def make_fig_real_data(fig_dir: Path, rep_dir: Path):
-    real_meta_path = Path("data/real/wise_casing/labels.yaml")
-    if not real_meta_path.exists():
+    """Real WISE-CASING pulse-TDR records with measured incident pulse and strongest echo."""
+    real_dir = Path("data/real/wise_casing")
+    if not (real_dir / "labels.yaml").exists():
         print("Real data labels not found. Skipping fig_real_data gracefully.")
         return
-
     try:
-        from tdr.data import load_real_wise_casing
-        real_data = load_real_wise_casing("data/real/wise_casing")
-        traces = real_data["traces"]
-        meta_df = real_data["meta"]
-        t_grid = np.linspace(0.0, 2.5 * 1023.0 / 1024.0, 1024)
-
-        # Load predictions if available
-        pred_dict = {}
-        eval_json = Path("results/experiments/real_data_eval.json")
-        if eval_json.exists():
-            with open(eval_json, "r") as f:
-                data = json.load(f)
-                for item in data.get("eval_table", []):
-                    pred_dict[item["Trace"]] = item
-
-        # Select 4 key traces for 2x2 layout
-        selected_indices = [0, 1, 2, 4]  # 85m undam, 85m dam (40m), 20m undam, 5m undam
-        fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
-        axes = axes.flatten()
-
-        for plot_idx, trace_idx in enumerate(selected_indices):
-            if trace_idx >= len(traces):
-                continue
-            ax = axes[plot_idx]
-            row = meta_df.iloc[trace_idx]
-            v = traces[trace_idx]
-            fname = row["filename"]
-            l_m = row["cable_length_m"]
-
-            ax.plot(t_grid, v, color="#0072B2", lw=1.5, label="Normalized Real TDR")
-            ax.axvline(0.05, color="#D55E00", linestyle="--", lw=1.2, label="Incident Edge")
-            ax.axvline(1.05, color="#CC79A7", linestyle=":", lw=1.5, label="Load Echo (Round-trip)")
-
-            if pd.notna(row["fault_pos_m"]):
-                f_norm = 0.05 + float(row["fault_pos_m"]) / l_m
-                ax.axvline(f_norm, color="#009E73", linestyle="-.", lw=1.8, label=f"True Damage ({row['fault_pos_m']:.0f}m)")
-
-            preds = pred_dict.get(fname, {})
-            title_str = f"{fname} (l = {l_m:.0f}m)\nTrue: Fault={row['fault_type']}, Load={row['load_type']}"
-            if "ResNet Fault" in preds:
-                title_str += f" | ResNet Pred: {preds['ResNet Fault']}"
-            ax.set_title(title_str, fontsize=10)
-            ax.set_ylabel(r"$\tilde{v} = v / v_{\mathrm{inc}}$")
-            ax.set_ylim(-1.5, 2.5)
-            ax.grid(True, linestyle=":", alpha=0.6)
-            if plot_idx == 0:
-                ax.legend(loc="upper right", fontsize=8)
-
-        axes[2].set_xlabel(r"Normalized Time $t / T_{\mathrm{nom}}$")
-        axes[3].set_xlabel(r"Normalized Time $t / T_{\mathrm{nom}}$")
-        plt.tight_layout()
+        from tdr.data import analyse_real_wise_casing
+        real = analyse_real_wise_casing(real_dir)
+        df = real["table"]
+        vf_est = real.get("vf_est")
+        n = len(df)
+        fig, axes = plt.subplots(n, 1, figsize=(9, 2.0 * n), sharex=True)
+        axes = np.atleast_1d(axes)
+        for ax, (_, r) in zip(axes, df.iterrows()):
+            t, v = real["raw"][r["file"]]
+            vn = v / np.max(np.abs(v[t < 0.12]))
+            ax.plot(t, vn, color="#0072B2", lw=1.1)
+            ax.axvline(r["t0_us"], color="0.4", ls="--", lw=1.0, label="incident pulse peak")
+            ax.axvline(r["t_echo_us"], color="#D55E00", ls="-", lw=1.4, label="strongest echo")
+            if vf_est:
+                t_exp = r["t0_us"] + 2.0 * r["documented_length_m"] / (vf_est * C_CONST) * 1e6
+                ax.axvline(t_exp, color="#009E73", ls=":", lw=1.6, label="expected termination echo")
+                if pd.notna(r["documented_damage_m"]):
+                    t_d = r["t0_us"] + 2.0 * r["documented_damage_m"] / (vf_est * C_CONST) * 1e6
+                    ax.axvline(t_d, color="#CC79A7", ls="-.", lw=1.6, label="expected damage echo (40 m)")
+            dmg = "" if pd.isna(r["documented_damage_m"]) else f", damage at {r['documented_damage_m']:.0f} m"
+            flag = r.get("consistent_with_vf_est")
+            flag_txt = "" if flag is None or (isinstance(flag, float) and np.isnan(flag)) else ("" if flag else "  [echo inconsistent with stated length]")
+            ax.set_title(f"{r['file']}: documented {r['documented_length_m']:.0f} m, short termination{dmg}{flag_txt}", fontsize=9)
+            ax.set_ylabel("v / |v_inc|", fontsize=8)
+            ax.set_xlim(0, 2.0)
+            ax.grid(True, ls=":", alpha=0.6)
+        axes[0].legend(fontsize=7, loc="upper right", ncol=2)
+        axes[-1].set_xlabel(r"Time ($\mu$s)")
+        if vf_est:
+            fig.suptitle(f"WISE-CASING pulse-TDR records (velocity factor estimated from 80 m reference: {vf_est:.3f})", fontsize=10)
         save_fig(fig, "fig_real_data", fig_dir, rep_dir)
         print("Figure 16 (Real Data) generated successfully!")
     except Exception as e:

@@ -31,12 +31,13 @@ from tdr.data import (
     FAULT_TO_ID,
     LOAD_TO_ID,
     TDRDataset,
+    TensorTDRData,
     preprocess_numpy,
     preprocess,
     decode_load_r,
     decode_load_tau,
 )
-from tdr.features import extract_features
+from tdr.features import extract_features, cached_features
 from tdr.models import LGBMSuite, ResNet1D, MaskedMultiTaskLoss
 from tdr.metrics import compute_all_metrics
 
@@ -74,15 +75,16 @@ def train_conventional(
     )
 
     solver = ConventionalTDR(
-        k_sigma=4.0,
         min_sep_samples=cfg["conventional"]["min_sep_samples"],
         transient_return_samples=cfg["conventional"]["transient_return_samples"],
         z0_nominal=cfg["physics"]["z0_nominal"],
+        r_dc_ohm_per_m=cfg["physics"]["r_dc_ohm_per_m"],
     )
 
-    print("Tuning k_sigma on validation set...")
-    best_k = solver.tune_on_val(preproc_va, meta_va, k_grid=cfg["conventional"]["k_sigma_grid"])
-    print(f"Optimal k_sigma selected: {best_k}")
+    print("Tuning all conventional thresholds on the validation set (never on test)...")
+    best_params = solver.tune_on_val(preproc_va, meta_va, k_grid=cfg["conventional"]["k_sigma_grid"])
+    best_k = best_params["k_sigma"]
+    print(f"Selected thresholds: {best_params}")
 
     # Load test set for evaluation
     with h5py.File(data_dir / f"test{suffix}.h5", "r") as f:
@@ -93,7 +95,7 @@ def train_conventional(
     )
 
     print(f"Evaluating Conventional TDR on test set ({len(clean_te)} samples)...")
-    preds = solver.predict_batch(preproc_te)
+    preds = solver.predict_batch(preproc_te, meta_te["length_m"].values)
 
     pred_fault_cls = [p["fault_class"] for p in preds]
     pred_fault_pos = [p["fault_pos_frac"] for p in preds]
@@ -128,19 +130,14 @@ def train_conventional(
     })
     metrics = compute_all_metrics(eval_df)
 
-    with open(run_dir / "metrics.json", "w") as f:
+    with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
 
     df_pred.to_parquet(run_dir / "predictions.parquet", index=False)
 
     # Save tuned parameters for app deployment
-    conventional_params = {
-        "best_k_sigma": float(best_k),
-        "min_sep_samples": int(cfg["conventional"]["min_sep_samples"]),
-        "transient_return_samples": int(cfg["conventional"]["transient_return_samples"]),
-        "z0_nominal": float(cfg["physics"]["z0_nominal"]),
-    }
-    with open(run_dir / "conventional.json", "w") as f:
+    conventional_params = solver.to_dict()
+    with open(run_dir / "conventional.json", "w", encoding="utf-8") as f:
         json.dump(conventional_params, f, indent=2)
 
     config_log = {
@@ -148,10 +145,11 @@ def train_conventional(
         "model": "conventional",
         "quick": quick,
         "best_k_sigma": best_k,
+        "tuned_params": best_params,
         "git_hash": get_git_hash(),
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    with open(run_dir / "config.json", "w") as f:
+    with open(run_dir / "config.json", "w", encoding="utf-8") as f:
         json.dump(config_log, f, indent=2)
 
     print(f"Conventional Test Fault Accuracy: {metrics['t1_fault']['accuracy']*100:.2f}% (Chance: 14.3%)")
@@ -202,10 +200,10 @@ def train_lgbm(
     v_inc_tr = meta_tr["v_inc"].values
 
     print(f"Extracting features from {n_copies} noisy copies of training set...")
+    cache_dir = data_dir / "cache"
     for copy_idx in range(n_copies):
         copy_seed = seed * 100 + copy_idx
-        preproc_tr = preprocess_numpy(clean_tr, v_inc_tr, seed=copy_seed, add_noise=True)
-        X_tr_list.append(extract_features(preproc_tr))
+        X_tr_list.append(cached_features(cache_dir, clean_tr, v_inc_tr, None, copy_seed, preprocess_numpy))
 
     X_train = np.concatenate(X_tr_list, axis=0)
     meta_tr_rep = pd.concat([meta_tr] * n_copies, ignore_index=True)
@@ -214,8 +212,7 @@ def train_lgbm(
     print("Extracting features from validation set...")
     eval_seed = cfg["noise"]["eval_noise_seed"]
     v_inc_va = meta_va["v_inc"].values
-    preproc_va = preprocess_numpy(clean_va, v_inc_va, snr_db=cfg["noise"]["eval_snr_db"], seed=eval_seed, add_noise=True)
-    X_val = extract_features(preproc_va)
+    X_val = cached_features(cache_dir, clean_va, v_inc_va, cfg["noise"]["eval_snr_db"], eval_seed, preprocess_numpy)
 
     # Initialize and train LGBMSuite
     suite = LGBMSuite(cfg)
@@ -270,7 +267,7 @@ def train_lgbm(
     })
     metrics = compute_all_metrics(eval_df)
 
-    with open(run_dir / "metrics.json", "w") as f:
+    with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
 
     df_pred.to_parquet(run_dir / "predictions.parquet", index=False)
@@ -284,7 +281,7 @@ def train_lgbm(
         "git_hash": get_git_hash(),
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    with open(run_dir / "config.json", "w") as f:
+    with open(run_dir / "config.json", "w", encoding="utf-8") as f:
         json.dump(config_log, f, indent=2)
 
     print(f"Validation Fault Macro-F1: {metrics['t1_fault']['macro_f1']:.4f}")
@@ -359,27 +356,32 @@ def train_resnet(
     ch_std = [s if s > 1e-4 else 1.0 for s in ch_std]
 
     norm_stats = {"mean": ch_mean, "std": ch_std}
-    with open(run_dir / "resnet_norm.json", "w") as f:
+    with open(run_dir / "resnet_norm.json", "w", encoding="utf-8") as f:
         json.dump(norm_stats, f, indent=2)
 
     mean_t = torch.tensor(ch_mean, device=device, dtype=torch.float32).view(1, 3, 1)
     std_t = torch.tensor(ch_std, device=device, dtype=torch.float32).view(1, 3, 1)
 
-    # Datasets and loaders
-    train_ds = TDRDataset(train_h5, train_meta_path, cached_noise=False)
-    if train_frac < 1.0:
-        n_sub = max(100, int(len(train_ds) * train_frac))
-        indices = np.random.default_rng(seed).choice(len(train_ds), size=n_sub, replace=False)
-        train_ds = torch.utils.data.Subset(train_ds, indices)
-        print(f"Subsampled train set to {len(train_ds)} samples (frac={train_frac})")
-
+    # Data held as tensors on the device; noise + preprocessing run per batch on the device
     val_h5 = data_dir / f"val{suffix}.h5"
     val_meta_path = data_dir / f"val{suffix}_meta.parquet"
-    val_ds = TDRDataset(val_h5, val_meta_path, snr_db=cfg["noise"]["eval_snr_db"], cached_noise=True, seed=cfg["noise"]["eval_noise_seed"])
+    n_train_total = len(pd.read_parquet(train_meta_path))
+    train_idx = None
+    if train_frac < 1.0:
+        n_sub = max(100, int(n_train_total * train_frac))
+        train_idx = np.random.default_rng(seed).choice(n_train_total, size=n_sub, replace=False)
+        print(f"Subsampled train set to {n_sub} samples (frac={train_frac})")
+    train_data = TensorTDRData(train_h5, train_meta_path, device, indices=train_idx)
+    val_data = TensorTDRData(val_h5, val_meta_path, device)
+    val_data.fix_noise(cfg["noise"]["eval_snr_db"], cfg["noise"]["eval_noise_seed"])
+    perm_gen = torch.Generator().manual_seed(seed)
+    noise_gen = torch.Generator(device=device).manual_seed(seed + 10_000)
 
     batch_size = cfg["train"]["batch_size"]
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+    use_amp = bool(cfg["train"].get("amp", True)) and device.type == "cuda"
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
 
     # Model and loss
     model = ResNet1D(in_channels=in_channels, embed_dim=cfg["resnet"]["embed_dim"], dropout=cfg["resnet"]["dropout"]).to(device)
@@ -406,52 +408,67 @@ def train_resnet(
     epochs = cfg["quick"]["epochs"] if quick else cfg["train"]["epochs"]
     lr = float(cfg["train"]["lr"])
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=float(cfg["train"]["weight_decay"]))
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    steps_per_epoch = max(1, int(np.ceil(train_data.n / batch_size)))
+    total_steps = epochs * steps_per_epoch
+    warmup_steps = min(int(cfg["train"].get("warmup_epochs", 1)) * steps_per_epoch, max(total_steps - 1, 1))
+
+    def lr_lambda(step: int) -> float:
+        """Linear warm-up for warmup_epochs, then cosine decay to 0 (per optimisation step)."""
+        if step < warmup_steps:
+            return (step + 1) / warmup_steps
+        progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+        return 0.5 * (1.0 + np.cos(np.pi * min(progress, 1.0)))
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    try:
+        scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    except (AttributeError, TypeError):  # torch < 2.3
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     patience = cfg["train"]["patience"]
     best_val_loss = float("inf")
     patience_counter = 0
     history = []
 
-    print(f"Beginning training for {epochs} epochs...")
+    print(f"Beginning training for {epochs} epochs ({steps_per_epoch} steps/epoch, AMP={use_amp})...")
     for epoch in range(1, epochs + 1):
+        t_epoch = time.time()
         model.train()
         train_loss_total = 0.0
         n_batches = 0
 
-        for batch in train_loader:
-            x = batch["x"].to(device)
-            # Standardize channels
+        for x, targets in train_data.batches(batch_size, shuffle=True, perm_generator=perm_gen, noise_generator=noise_gen):
             x = (x - mean_t) / std_t
             if in_channels < 3:
                 x = x[:, ch_indices, :]
 
-            targets = {k: v.to(device) for k, v in batch.items() if k != "x"}
-
-            optimizer.zero_grad()
-            preds = model(x)
+            optimizer.zero_grad(set_to_none=True)
+            with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                preds = model(x)
+            preds = {k: v.float() for k, v in preds.items()}
             loss, _ = criterion(preds, targets)
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler.step()
 
             train_loss_total += loss.item()
             n_batches += 1
 
-        scheduler.step()
         train_loss_avg = train_loss_total / max(1, n_batches)
 
-        # Validation loop
+        # Validation loop (fixed noise copy)
         model.eval()
         val_loss_total = 0.0
         n_val_batches = 0
         with torch.no_grad():
-            for batch in val_loader:
-                x = batch["x"].to(device)
+            for x, targets in val_data.batches(1024, shuffle=False):
                 x = (x - mean_t) / std_t
                 if in_channels < 3:
                     x = x[:, ch_indices, :]
-                targets = {k: v.to(device) for k, v in batch.items() if k != "x"}
-                preds = model(x)
+                with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                    preds = model(x)
+                preds = {k: v.float() for k, v in preds.items()}
                 loss, _ = criterion(preds, targets)
                 val_loss_total += loss.item()
                 n_val_batches += 1
@@ -463,8 +480,9 @@ def train_resnet(
             "train_loss": train_loss_avg,
             "val_loss": val_loss_avg,
             "lr": optimizer.param_groups[0]["lr"],
+            "epoch_time_s": time.time() - t_epoch,
         })
-        print(f"Epoch {epoch:02d}/{epochs:02d} | Train Loss: {train_loss_avg:.4f} | Val Loss: {val_loss_avg:.4f}")
+        print(f"Epoch {epoch:02d}/{epochs:02d} | Train Loss: {train_loss_avg:.4f} | Val Loss: {val_loss_avg:.4f} | {time.time() - t_epoch:.1f}s")
 
         # Checkpointing
         if val_loss_avg < best_val_loss:
@@ -481,14 +499,13 @@ def train_resnet(
     pd.DataFrame(history).to_csv(run_dir / "history.csv", index=False)
 
     # Load best checkpoint for evaluation
-    model.load_state_dict(torch.load(run_dir / "best_model.pt"))
+    model.load_state_dict(torch.load(run_dir / "best_model.pt", map_location=device))
     model.eval()
 
     # Generate predictions on val set
     val_preds_list = []
     with torch.no_grad():
-        for batch in val_loader:
-            x = batch["x"].to(device)
+        for x, _ in val_data.batches(1024, shuffle=False):
             x = (x - mean_t) / std_t
             if in_channels < 3:
                 x = x[:, ch_indices, :]
@@ -535,7 +552,7 @@ def train_resnet(
     })
     metrics = compute_all_metrics(eval_df)
 
-    with open(run_dir / "metrics.json", "w") as f:
+    with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
 
     df_pred.to_parquet(run_dir / "predictions.parquet", index=False)
@@ -551,7 +568,7 @@ def train_resnet(
         "git_hash": get_git_hash(),
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    with open(run_dir / "config.json", "w") as f:
+    with open(run_dir / "config.json", "w", encoding="utf-8") as f:
         json.dump(config_log, f, indent=2)
 
     print(f"Validation Fault Macro-F1: {metrics['t1_fault']['macro_f1']:.4f}")
@@ -572,7 +589,7 @@ if __name__ == "__main__":
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()
 
-    with open(args.config, "r") as f:
+    with open(args.config, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     if args.model == "conventional":
