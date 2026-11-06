@@ -1,43 +1,114 @@
-\documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
+\documentclass[11pt,a4paper]{article}
 
+% ---------------------------------------------------------------- packages
 \usepackage[T1]{fontenc}
-\usepackage{cite}
+\usepackage[utf8]{inputenc}
+\usepackage{mathptmx} % scalable Times text and maths
+\usepackage{courier}  % scalable typewriter font
+\usepackage[a4paper,margin=2.0cm,headheight=14pt]{geometry}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{graphicx}
-\usepackage{textcomp}
-\usepackage{xcolor}
 \usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{cite}
 \usepackage{url}
 \usepackage{microtype}
-\usepackage[section]{placeins} % keep floats inside their own section
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[section]{placeins} % floats never leave their own section
+\usepackage{needspace}
+\usepackage[hidelinks]{hyperref}
 
 \graphicspath{{figures/}}
 
-\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
-    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+% ---------------------------------------------------------------- layout
+\definecolor{accent}{RGB}{0,70,130}
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{0.8em}{}[\vspace{-0.4em}{\color{accent}\rule{\textwidth}{0.6pt}}]
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.2em}{0.8em}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.4em}
+\setlist{itemsep=2pt,topsep=4pt,parsep=0pt}
+\setlength{\parskip}{0.3em}
+\setlength{\parindent}{0pt}
+
+% fewer half-empty pages: allow floats to fill more of a text page
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.75}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small EE 305 Electromagnetic Waves \,|\, Group 15}
+\fancyhead[R]{\small Theme 4: ML-Based TL Fault and Load Identification}
+\fancyfoot[C]{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\renewcommand{\contentsname}{Index}
+\setcounter{tocdepth}{1}
 
 \begin{document}
 
-\title{Machine-Learning-Based Transmission Line Fault and Load Identification via Time-Domain Reflectometry}
+% ================================================================ front page
+\begin{titlepage}
+\centering
+\vspace*{1.2cm}
+{\large Indian Institute of Technology Indore\par}
+\vspace{0.4cm}
+{\large EE 305: Electromagnetic Waves \,--\, Course Project Report\par}
+\vspace{2.2cm}
+{\color{accent}\rule{\textwidth}{1pt}\par}
+\vspace{0.5cm}
+{\LARGE\bfseries Theme 4: Machine-Learning-Based Transmission Line\\[0.25em] Fault and Load Identification\par}
+\vspace{0.5cm}
+{\color{accent}\rule{\textwidth}{1pt}\par}
+\vspace{0.6cm}
+{\large Fault classification, fault location and load identification\\ from a single time-domain reflectometry (TDR) trace\par}
+\vspace{2.2cm}
+{\Large\bfseries Group 15\par}
+\vspace{0.7cm}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{c l c}
+\toprule
+\textbf{S.\ No.} & \textbf{Name} & \textbf{Roll Number} \\
+\midrule
+1 & Yogendra Singh & 240002083 \\
+2 & Dhananjay Dhumal & 240051008 \\
+3 & Gadgil Rucha Vinay & 240002025 \\
+4 & Karan Hitesh Bagthariya & 240002028 \\
+5 & Yash Brijesh Modi & 240002082 \\
+6 & Rohan Jain & 240002060 \\
+\bottomrule
+\end{tabular}
+\vfill
+{\normalsize Code repository: \url{https://github.com/ys-0212/gp15_em_waves}\par}
+\vspace{0.4cm}
+{\large November 2026\par}
+\end{titlepage}
 
-\author{\IEEEauthorblockN{Shlok Parikh}
-\IEEEauthorblockA{\textit{Department of Chemical Engineering} \\
-\textit{Indian Institute of Technology Indore}\\
-Simrol, Indore 453552, Madhya Pradesh, India \\
-Course: EE 305 Electromagnetic Waves (Theme 4)}
-}
+% ================================================================ index
+\thispagestyle{fancy}
+\tableofcontents
+\newpage
 
-\maketitle
+% ================================================================ body
+\section*{Project Summary}
+\addcontentsline{toc}{section}{Project Summary}
+Time-domain reflectometry (TDR) finds faults on a cable by launching a voltage step and timing the echoes that come back. Reading the echoes by hand or with fixed thresholds works for strong reflections. It fails when the reflection is weak, when loss and dispersion smear the echoes on a long line, or when noise is high.
 
-\begin{abstract}
-Time-domain reflectometry (TDR) locates faults on a cable from the echoes of a launched step, but threshold-based analysis struggles with weak reflections, lossy and dispersive lines, and noise. We study whether machine learning can recover more from a single step-TDR trace, on three tasks: classify the fault (7 classes), locate it, and identify the termination (6 classes, with $R_L$, $L$ or $C$). Training data come from a frequency-domain lossy-line simulator with skin effect and dielectric loss, validated against bounce-diagram and transient theory. We compare a conventional rule-based detector, LightGBM on 94 engineered features, and a multi-task 1-D ResNet. On 10,000 held-out traces at 30~dB SNR, the ResNet reaches a fault macro-$F_1$ of $0.848 \pm 0.007$ (LightGBM 0.790, conventional 0.622), a location error of 6.1~m mean and 1.6~m median, and a load accuracy of 96.3\% (93.4\% and 80.2\%). The learned models detect resistive faults with $|\Gamma|$ down to about 0.05, whereas the threshold detector needs 0.1--0.2. They remain ahead from 60 to 15~dB and under shifts in line impedance, rise time, loss and cable length, but every method fails when the fault lies within 3~m of the load. On public laboratory records of an 80~m coaxial cable, echo timing locates a shield cutaway within 1.5~m of its documented position.
-\end{abstract}
+In this project we asked whether machine learning can extract more from a single step-TDR trace. The model has three tasks: classify the fault (7 classes), locate it in metres, and identify the termination (6 classes, with its resistance, inductance or capacitance).
 
-\begin{IEEEkeywords}
-Time-domain reflectometry, transmission lines, telegrapher's equations, skin effect, fault location, load identification, LightGBM, 1-D ResNet.
-\end{IEEEkeywords}
+
+We built a frequency-domain simulator of a lossy coaxial line, with skin effect and dielectric loss, and checked it against bounce-diagram and transient theory. With it we generated 85,000 labelled traces. We then compared three methods: a conventional rule-based TDR detector, a gradient-boosted tree model (LightGBM) on 94 engineered features, and a multi-task one-dimensional residual neural network (1-D ResNet).
+
+On 10,000 held-out traces at 30~dB signal-to-noise ratio (SNR), the ResNet gave the best results on all three tasks. Its fault macro-$F_1$ was $0.848 \pm 0.007$ (LightGBM 0.790, conventional 0.622). Its location error was 6.1~m on average and 1.6~m median. Its load-identification accuracy was 96.3\% (LightGBM 93.4\%, conventional 80.2\%).
+The learned models detect resistive faults down to a reflection coefficient of about 0.05, while the threshold detector needs 0.1--0.2. They stay ahead from 60 to 15~dB and when the line impedance, rise time, loss or cable length move outside the training range. Every method fails when the fault lies within 3~m of the load. On public laboratory records of an 80~m coaxial cable, echo timing alone placed a real shield cutaway within 1.5~m of its documented position.
 
 \input{sections/1_introduction.tex}
 \input{sections/2_theory.tex}
@@ -47,8 +118,12 @@ Time-domain reflectometry, transmission lines, telegrapher's equations, skin eff
 \input{sections/6_results.tex}
 \input{sections/7_discussion_and_conclusion.tex}
 
+\FloatBarrier
+\phantomsection
+\addcontentsline{toc}{section}{References}
+{\small
 \bibliographystyle{IEEEtran}
 \bibliography{refs}
+}
 
 \end{document}
-

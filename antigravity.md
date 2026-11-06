@@ -107,6 +107,8 @@ Repo + IEEE-style report. No presentation. Owner: Shlok Parikh.
 - 2026-11-06: early stopping (patience 8) ended 2 of the 12 ResNet runs early (seed 2 at epoch 20; ch_vdv ablation at 15) because the validation loss is noisy. All other runs had their best epoch at 38-40. This is documented in the report. Optional fix: set train.patience >= epochs and rerun on Kaggle.
 - 2026-11-06: report Results/Discussion/Limitations/Conclusion/Abstract written from the full-run numbers. Dataset ranges in Section III corrected to config.yaml. refs.bib entries verified via Crossref (novel2025wiring authors filled; ieee2024cs_tdr corrected to the AUTOTESTCON 2024 paper; Scarpetta author list fixed; Smail 2011 added). The report compiles with IEEEtran (0 errors, 0 undefined references, 16 pages).
 
+- 2026-11-06: the report was converted from an IEEE two-column paper to a single-column project report (20 pages). It now has a front page (Group 15 member table, course, repository link), an index page, and a project summary. Floats stay within their own section, and the text was condensed and clarified throughout. The loss weights in Methods were corrected to config.yaml (1/10/1/1, Huber 0.02/0.1). The README author line was replaced with the Group 15 member list, and kaggle_run.ipynb REPO_URL now points to github.com/ys-0212/gp15_em_waves.
+
 ## Known issues / TODO
 - Optional: rerun with early stopping disabled (train.patience: 40) for cleaner seed statistics and (v, dv) ablation.
 - Conventional method is weak on z0_section and shunt_C (short sections / capacitive dips are smeared by loss and rise time); documented in recall_vs_gamma table.

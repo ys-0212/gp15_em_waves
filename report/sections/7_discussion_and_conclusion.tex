@@ -1,31 +1,39 @@
-\section{Discussion, Limitations \& Conclusion}
+\section{Discussion}
 \label{sec:discussion}
 
-\subsection{Discussion of Findings}
-\emph{What machine learning adds over textbook TDR.} The conventional detector is not a weak baseline where its assumptions hold. On hard faults and strong reflections it is as accurate as the learned models, and when it fires it locates the echo more precisely (median error 0.91~m). Its failures are systematic.
-\begin{itemize}
-    \item Its detection threshold sits near $|\Gamma| \approx 0.1$--$0.2$ at 30~dB, so it misses a third of all faults.
-    \item It cannot separate a weak fault from no fault.
-    \item Its load identification breaks down on lossy lines, where the load edge is smeared.
-\end{itemize}
+\subsection{What machine learning adds over textbook TDR}
+The conventional detector is not a weak baseline where its assumptions hold. On hard faults and strong reflections it is as accurate as the learned models, and when it fires it locates the echo more precisely (median error 0.91~m). Its failures are systematic. Its detection threshold sits near $|\Gamma| \approx 0.1$--$0.2$ at 30~dB, so it misses a third of all faults and cannot separate a weak fault from no fault. Its load identification also breaks down on lossy lines, where the load edge is smeared.
 The learned models are useful precisely in these regimes. They detect resistive faults about two to three times weaker, they classify loads above 93\% at 30~dB, and they keep their advantage over the whole noise range and on every OOD shift. Both methods have physically meaningful limits: weak, short or capacitive discontinuities produce echoes that are hard to tell apart from noise, and no model trained on these data recovers them reliably.
 
-\emph{Gradient boosting versus a 1-D ResNet.} LightGBM is a strong, cheap and interpretable model: 94 features, about 16~min of CPU training per seed, and the lowest error on the load resistance. The ResNet is better on almost every other metric and is far more data-efficient. Trained on 3,000 traces, it already beats LightGBM trained on 60,000. It also degrades more gracefully below the training SNR range. Its price is higher seed-to-seed variance and a dependence on the training schedule (below). The SHAP analysis shows that LightGBM does not rely mainly on our hand-derived physics features (first-edge $\hat\Gamma$, $Z/Z_0$). It relies on the raw trace level just before the load echo and on edge timing. This suggests that much of our feature engineering was redundant with simply sampling the trace.
+\subsection{Gradient boosting versus a 1-D ResNet}
+LightGBM is a strong, cheap and interpretable model: 94 features, about 16~min of CPU training per seed, and the lowest error on the load resistance. The ResNet is better on almost every other metric and is far more data-efficient. Trained on 3,000 traces, it already beats LightGBM trained on 60,000. It also degrades more gracefully below the training SNR range. Its price is higher seed-to-seed variance and a dependence on the training schedule (below). The SHAP analysis shows that LightGBM does not rely mainly on our hand-derived physics features (first-edge $\hat\Gamma$, $Z/Z_0$). It relies on the raw trace level just before the load echo and on edge timing. This suggests that much of our feature engineering was redundant with simply sampling the trace.
 
-\emph{Input channels and multi-task learning.} The ablations show that the Savitzky--Golay derivative and the coordinate channel are unnecessary. With a flattening head, the network can locate echoes in time from the voltage alone, and the first convolution learns its own derivative filter. Sharing one backbone across the three tasks is free for classification but costs about 1.2~m of location MAE compared with a location-only network. When location accuracy matters most, a dedicated location network, or a heavier location loss weight, is the better choice.
+\subsection{Input channels and multi-task learning}
+The ablations show that the Savitzky--Golay derivative and the coordinate channel are unnecessary. With a flattening head, the network can locate echoes in time from the voltage alone, and the first convolution learns its own derivative filter. Sharing one backbone across the three tasks is free for classification but costs about 1.2~m of location MAE compared with a location-only network. When location accuracy matters most, a dedicated location network, or a heavier location loss weight, is the better choice.
 
-\emph{Location error.} Two numbers summarise the location results: a 1.6~m median and a 6~m mean. Strong reflections ($|\Gamma| \ge 0.2$) are located to 1.0--1.7~m. The mean is dominated by weak faults, for which the regression head falls back towards the middle of the line (Fig.~\ref{fig:hard_case} shows such a case). A hybrid method is suggested by these results. The learned classifier would decide \emph{whether} and \emph{which} fault is present and give a coarse position. A conventional edge-timing step inside that window would then provide the sample-level precision that the rule-based detector already achieves.
+\subsection{Location error}
+Two numbers summarise the location results: a 1.6~m median and a 6~m mean. Strong reflections ($|\Gamma| \ge 0.2$) are located to 1.0--1.7~m. The mean is dominated by weak faults, for which the regression head falls back towards the middle of the line (Fig.~\ref{fig:hard_case} shows such a case). A hybrid method is suggested by these results. The learned classifier would decide \emph{whether} and \emph{which} fault is present and give a coarse position. A conventional edge-timing step inside that window would then provide the sample-level precision that the rule-based detector already achieves.
 
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\columnwidth]{fig_hard_case.pdf}
+\begin{minipage}[t]{0.48\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_hard_case.pdf}
 \caption{A hard case: a $350\ \Omega$ shunt fault at $d/l = 0.90$ in front of an $RC$ load. The fault echo ($|\Gamma| \approx 0.07$) is close to the noise level at 25~dB and overlaps the start of the load transient.}
 \label{fig:hard_case}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_training_curves.pdf}
+\caption{ResNet training and validation loss for the three seeds. Stars mark the saved checkpoint; seed 2 was stopped by the patience rule at epoch 20.}
+\label{fig:training_curves}
+\end{minipage}
 \end{figure}
 
-\emph{Real hardware.} The laboratory records confirm the propagation physics that the simulator and the location target rely on. Echo timing on a real 80~m coaxial cable gives a plausible velocity factor (0.638). The echo-time ratio places a real shield cutaway within 1.5~m of its documented position, with the polarity expected for a local impedance increase. We could not test the learned models on these data: the records are pulse-type TDR, and two of the five appear to be mislabelled.
+\subsection{Real hardware}
+The laboratory records confirm the propagation physics that the simulator and the location target rely on. Echo timing on a real 80~m coaxial cable gives a plausible velocity factor (0.638). The echo-time ratio places a real shield cutaway within 1.5~m of its documented position, with the polarity expected for a local impedance increase. We could not test the learned models on these data: the records are pulse-type TDR, and three of the five do not match their documented cable lengths.
 
-\subsection{Limitations and Future Scope}
+\Needspace{8\baselineskip}
+\section{Limitations and Future Work}
+\label{sec:limitations}
 \begin{itemize}
     \item \textbf{Simulation-only evaluation of the ML models.} All learned-model results are on simulated traces. The only public laboratory data we found are pulse-type, so only the echo-timing physics was checked on hardware. A true sim-to-real test needs step-TDR measurements of lab coax with known faults, for example from a NanoVNA in time-domain mode.
     \item \textbf{Simplified line and instrument model.} The simulator covers one discontinuity and one termination on a single coaxial line, with skin effect and a constant loss tangent. It omits connectors, multiple or distributed faults, branched networks, temperature gradients, the instrument's own response (sampling jitter, baseline drift) and non-Gaussian interference. Each OOD subset changes only one factor at a time.
@@ -34,12 +42,6 @@ The learned models are useful precisely in these regimes. They detect resistive 
     \item \textbf{Statistical scope.} The learning curves, ablations, noise sweep, OOD and error breakdowns use one seed (seed 0) and one fixed noise realisation per SNR level. Only the main comparison averages three seeds.
 \end{itemize}
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{fig_training_curves.pdf}
-\caption{ResNet training and validation loss for the three seeds. Stars mark the saved checkpoint; seed 2 was stopped by the patience rule at epoch 20.}
-\label{fig:training_curves}
-\end{figure}
 
-\subsection{Conclusion}
-We built an end-to-end framework for identifying transmission-line faults and loads from a single step-TDR trace. It rests on a frequency-domain lossy-line simulator validated against bounce-diagram and transient theory. On it we compared a conventional rule-based detector, LightGBM on 94 engineered features, and a multi-task 1-D ResNet. On 10,000 held-out traces at 30~dB, the ResNet reached a fault macro-$F_1$ of $0.848 \pm 0.007$ (LightGBM 0.790, conventional 0.622), a location MAE of $6.06 \pm 0.63$~m (median 1.6~m; 1.0--1.7~m for $|\Gamma| \ge 0.2$) and a load accuracy of $96.3\% \pm 0.8\%$ (93.4\% and 80.2\%). The learned models move the detectable reflection from $|\Gamma| \approx 0.1$--$0.2$ down to about 0.05. They also stay ahead of the conventional method from 60 to 15~dB and under shifts in impedance, rise time, loss and cable length. All methods fail for faults within 3~m of the load. On real laboratory records, echo timing located a shield cutaway on an 80~m cable within 1.5~m. The main next step is a sim-to-real test of the learned models on measured step-TDR traces.
+\section{Conclusion}
+We built a complete ML pipeline for diagnosing a transmission line from one step-TDR trace: a lossy-line simulator checked against EM theory, an 85,000-trace dataset, three diagnostic methods and eight experiments. The multi-task 1-D ResNet gave the best results on every task. It reached a fault macro-$F_1$ of $0.848 \pm 0.007$, a location error of 1.0--1.7~m for reflections with $|\Gamma| \ge 0.2$ (6.1~m mean over all faults) and a load accuracy of 96.3\%. It stayed ahead of both alternatives from 60 to 15~dB and under every distribution shift except faults within 3~m of the load, which no method could resolve. The learned models halve the weakest detectable reflection compared with a threshold detector. On real laboratory records, echo timing located a cable defect to within 1.5~m. The next step is to test the trained models on measured step-TDR traces of cables with known faults.

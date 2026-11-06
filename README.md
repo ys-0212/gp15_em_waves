@@ -2,8 +2,8 @@
 
 **Course:** EE 305 Electromagnetic Waves, Indian Institute of Technology Indore (IIT Indore)  
 **Theme 4:** Machine-Learning-Based Transmission Line Fault and Load Identification  
-**Author:** Shlok Parikh (Department of Chemical Engineering, IIT Indore)  
-**Deliverables:** Complete tested codebase and IEEE-style conference research report (`report/main.tex`).
+**Group 15:** Yogendra Singh (240002083), Dhananjay Dhumal (240051008), Gadgil Rucha Vinay (240002025), Karan Hitesh Bagthariya (240002028), Yash Brijesh Modi (240002082), Rohan Jain (240002060)  
+**Deliverables:** Complete tested codebase and the project report ([`report/report.pdf`](report/report.pdf), LaTeX source in `report/`).
 
 ---
 
@@ -67,7 +67,7 @@ EM_WAVES_PROJECT/
 ├── run_all.py                  # Master pipeline orchestrator (--mode quick/full, --device cpu/cuda)
 ├── app.py                      # Interactive Streamlit application (simulation and CSV upload)
 ├── tests.py                    # 15 physics, simulator, pipeline and baseline-acceptance tests
-├── kaggle_run.ipynb            # Self-contained notebook to run full training on Kaggle GPU
+├── kaggle_run_final.ipynb      # Kaggle GPU notebook (with the outputs of the full run)
 ├── data/
 │   ├── README.md               # Synthetic and real dataset documentation
 │   ├── dataset_card.md         # Full dataset specifications, splits, and parameter bounds
@@ -79,8 +79,8 @@ EM_WAVES_PROJECT/
 │   └── runs/                   # Model training configs, histories, and predictions
 ├── figures/                    # 16 publication figures (300-dpi PNG and vector PDF)
 ├── app/weights/                # Exported deployment model weights for the Streamlit app
-└── report/                     # IEEE-style conference research report
-    ├── main.tex                # Root LaTeX document (IEEEtran conference class)
+└── report/                     # Project report (report.pdf + LaTeX source)
+    ├── main.tex                # Root LaTeX document (single-column report)
     ├── refs.bib                # BibTeX references
     ├── README.md               # Overleaf compilation instructions
     ├── sections/               # Sections 1 to 7 (Theory, Methods, Results, Discussion)
@@ -130,10 +130,10 @@ streamlit run app.py
 To train on the full 85,000-sample dataset across multiple seeds:
 1. Push your local repository to a private or public GitHub repo:
    ```powershell
-   git remote add origin https://github.com/<USERNAME>/tdr-fault-load-ml.git
+   git remote add origin https://github.com/ys-0212/gp15_em_waves.git
    git push -u origin master
    ```
-2. Open [Kaggle](https://www.kaggle.com/), create a new Notebook, and import or paste `kaggle_run.ipynb`.
+2. Open [Kaggle](https://www.kaggle.com/), create a new Notebook, and import or paste `kaggle_run_final.ipynb`.
 3. Set **Accelerator = GPU (T4 or P100)** and **Internet = On**.
 4. Update `REPO_URL` in Cell 2 with your GitHub repository URL.
 5. Run all cells:
@@ -198,13 +198,13 @@ Full dataset specifications and parameter distributions are documented in [`data
 
 ---
 
-## 8. IEEE Conference Report
+## 8. Project Report
 
-The research paper is written in LaTeX using the standard `IEEEtran` conference template in `report/`:
-- `report/main.tex`: Root document.
-- `report/sections/`: Complete Theory, Simulation, Methodology, Experimental Protocol, and Results sections.
+The compiled report is [`report/report.pdf`](report/report.pdf) (20 pages: front page, index, and nine sections). Its LaTeX source is in `report/`:
+- `report/main.tex`: Root document (front page, index, project summary).
+- `report/sections/`: Introduction, Theory, Simulator and Dataset, Methods, Experimental Setup, Results, Discussion, Limitations, Conclusion.
 - `report/figures/`: Pre-synchronized vector PDF figures.
 - `report/tables/`: Pre-synchronized booktabs LaTeX tables.
-- `report/refs.bib`: Complete BibTeX references.
+- `report/refs.bib`: BibTeX references (verified against publisher records); `report/IEEEtran.bst`: bibliography style.
 
 To compile on **Overleaf**, simply upload the `report/` folder and click **Recompile**.

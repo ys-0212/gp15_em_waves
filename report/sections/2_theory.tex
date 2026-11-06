@@ -1,31 +1,27 @@
-\section{Electromagnetic Wave Theory \& TDR Modeling}
+\section{Transmission-Line Theory Behind TDR}
 \label{sec:theory}
 
 \subsection{Telegrapher's Equations and Lossy Wave Propagation}
-TEM wave propagation along a uniform two-conductor transmission line is governed by the frequency-domain Telegrapher's Equations \cite{pozar2011microwave}:
+A coaxial cable supports a transverse electromagnetic (TEM) wave. Along a uniform line, the voltage and current phasors obey the telegrapher's equations \cite{pozar2011microwave}:
 \begin{equation}
 \frac{d V(z, \omega)}{dz} = -Z(\omega) I(z, \omega), \quad \frac{d I(z, \omega)}{dz} = -Y(\omega) V(z, \omega)
 \label{eq:telegrapher}
 \end{equation}
-where $Z(\omega) = R(\omega) + j\omega L$ and $Y(\omega) = G(\omega) + j\omega C$ represent the series impedance and shunt admittance per unit length, respectively. Decoupling (\ref{eq:telegrapher}) yields the Helmholtz wave equations:
-\begin{equation}
-\frac{d^2 V(z, \omega)}{dz^2} - \gamma^2(\omega) V(z, \omega) = 0
-\end{equation}
-whose solutions comprise forward- and backward-traveling waves with complex propagation constant $\gamma(\omega) = \alpha(\omega) + j\beta(\omega) = \sqrt{Z(\omega)Y(\omega)}$ and characteristic impedance $Z_0(\omega) = \sqrt{Z(\omega)/Y(\omega)}$:
+where $Z(\omega) = R(\omega) + j\omega L$ and $Y(\omega) = G(\omega) + j\omega C$ represent the series impedance and shunt admittance per unit length, respectively. Eliminating $I$ gives the wave equation $d^2V/dz^2 = \gamma^2 V$, whose solutions are forward- and backward-traveling waves with complex propagation constant $\gamma(\omega) = \alpha(\omega) + j\beta(\omega) = \sqrt{Z(\omega)Y(\omega)}$ and characteristic impedance $Z_0(\omega) = \sqrt{Z(\omega)/Y(\omega)}$:
 \begin{equation}
 V(z, \omega) = V_0^+ e^{-\gamma(\omega) z} + V_0^- e^{+\gamma(\omega) z}
 \label{eq:wave_sol}
 \end{equation}
 
 \subsection{Lossy Coaxial Cable Physics (Skin Effect \& Dielectric Dissipation)}
-To realistically model RG-58-like coaxial cables, we incorporate both conductor and dielectric losses:
+A real coaxial cable loses energy in both its conductors and its dielectric, and both losses grow with frequency. We model them as follows:
 \begin{enumerate}
     \item \textbf{Skin Effect:} At radio frequencies, current concentrates within a surface layer of depth $\delta_s = \sqrt{2/(\omega \mu \sigma)}$. Consequently, the series resistance increases with the square root of frequency:
     \begin{equation}
     R(\omega) = R_{\mathrm{dc}} + k_{\mathrm{skin}} \sqrt{\frac{\omega}{2\pi}}
     \label{eq:skin_effect}
     \end{equation}
-    where $R_{\mathrm{dc}} = 0.04\ \Omega/\mathrm{m}$ is the DC resistance and $k_{\mathrm{skin}} = 1.5 \times 10^{-4}\ \Omega/(\mathrm{m}\cdot\sqrt{\mathrm{Hz}})$ governs the skin depth boundary layer.
+    where $R_{\mathrm{dc}} = 0.04\ \Omega/\mathrm{m}$ is the DC resistance and $k_{\mathrm{skin}} = 1.5 \times 10^{-4}\ \Omega/(\mathrm{m}\cdot\sqrt{\mathrm{Hz}})$ sets the strength of the skin effect (about 0.13~dB/m at 100~MHz).
     \item \textbf{Dielectric Loss:} The insulating polyethylene dielectric possesses a non-zero loss tangent $\tan\delta$, yielding a shunt conductance directly proportional to frequency:
     \begin{equation}
     G(\omega) = \omega C \tan\delta
@@ -42,13 +38,9 @@ When a propagating voltage wave encounters a localized impedance boundary $Z_{\m
 \label{eq:gamma}
 \end{equation}
 
-\subsubsection{Hard Faults}
-\begin{itemize}
-    \item \textbf{Short Circuit ($Z_f \to 0$):} $\Gamma = -1$. The reflected pulse has equal amplitude and reversed polarity, forcing total terminal voltage to zero upon arrival.
-    \item \textbf{Open Circuit ($Z_f \to \infty$):} $\Gamma = +1$. The reflected pulse has equal amplitude and identical polarity, doubling the terminal voltage upon arrival.
-\end{itemize}
+\textbf{Hard faults.} A short ($Z_f \to 0$) gives $\Gamma = -1$: the echo has equal size and opposite sign, and it pulls the sending-end voltage to zero when it arrives. An open ($Z_f \to \infty$) gives $\Gamma = +1$ and doubles the voltage.
 
-\subsubsection{Soft Reactive and Resistive Faults}
+\textbf{Soft faults.}
 \begin{itemize}
     \item \textbf{Shunt Faults ($Z_f$ in parallel with line):} The effective impedance seen at the discontinuity is the parallel combination of $Z_f$ and the downstream line impedance $Z_0$:
     \begin{equation}
@@ -105,9 +97,5 @@ T_{\mathrm{nom}} = \frac{2 l}{u} = \frac{2 l}{v_f c}
 \end{equation}
 A fault at distance $d$ produces its first echo at $t_f = 2d/u = (d/l) T_{\mathrm{nom}}$, while the load echo arrives at $t_L = T_{\mathrm{nom}}$.
 
-\textbf{Physical Masking Constraints:}
-\begin{itemize}
-    \item \textit{Fault Location Masking:} When a cable is pristine (\texttt{none}), no fault discontinuity exists; hence the fault location $d/l$ is physically undefined and must be masked out during both model training and metric computation.
-    \item \textit{Load Masking by Hard Discontinuities:} If the cable contains an ideal hard short ($\Gamma = -1$) or hard open ($\Gamma = +1$), the discontinuity acts as a perfect electromagnetic reflector. No forward wave energy penetrates past $z=d$ to interrogate the downstream cable or termination. Consequently, downstream load class and parameter predictions are unobservable and must be masked out for samples with \texttt{short} or \texttt{open} faults.
-\end{itemize}
+\textbf{Consequences for the learning tasks.} Two targets do not always exist physically. On a fault-free line there is no fault position, so location is neither trained nor scored for \texttt{none}. A hard short or open reflects the whole wave, so nothing reaches the load and it cannot be observed. The load tasks are therefore masked out for \texttt{short} and \texttt{open} faults, both in the training loss and in the metrics.
 

@@ -1,12 +1,12 @@
-\section{Diagnostic Methodologies}
+\section{Methods}
 \label{sec:methods}
 
-\begin{figure*}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\textwidth]{fig_pipeline.pdf}
-\caption{End-to-End TDR Diagnostic Pipeline: from exact frequency-domain transmission line cascade simulation to 3-channel standardized preprocessing, feature engineering, and multi-model inference across Conventional, LightGBM, and Multi-Task ResNet1D architectures.}
+\includegraphics[width=0.78\textwidth]{fig_pipeline.pdf}
+\caption{Project pipeline. Traces from the lossy-line simulator are stored, noise is added and the trace is normalised, and the same preprocessed input goes to the three methods, each of which answers the three tasks (T1 fault type, T2 fault location, T3 load).}
 \label{fig:pipeline}
-\end{figure*}
+\end{figure}
 
 \subsection{Unified Preprocessing Pipeline}
 Fig.~\ref{fig:pipeline} shows the complete pipeline. All three methods consume the same preprocessed inputs, produced by a single function. A raw trace $v(0, t)$ is normalized against the incident plateau step $v_{\mathrm{inc}}$:
@@ -14,87 +14,53 @@ Fig.~\ref{fig:pipeline} shows the complete pipeline. All three methods consume t
 \tilde{v}(t) = \frac{v(0, t)}{v_{\mathrm{inc}}}
 \label{eq:v_norm}
 \end{equation}
-Three parallel feature channels are constructed:
-\begin{enumerate}
-    \item \textbf{Normalized Voltage $\tilde{v}(t)$:} Encodes baseline plateaus and reflection step levels.
-    \item \textbf{Numerical Derivative $d\tilde{v}/dt$:} Implemented via a Savitzky-Golay finite impulse response (FIR) filter (window length 11, polynomial degree 2, first derivative) wrapped in a 1D convolution layer. This sharpens inflection points and isolates high-frequency wave arrival edges while suppressing high-frequency AWGN.
-    \item \textbf{Dimensionless Coordinate Channel $t/T_{\mathrm{nom}}$:} Linearly ramps from $0.0$ to $2.5 \cdot (1023/1024)$, providing explicit temporal and spatial reference coordinates.
-\end{enumerate}
-The resulting input tensor has shape $[3, 1024]$ across batch samples.
+where $v_{\mathrm{inc}}$ is the median of the incident plateau over $t/T_{\mathrm{nom}} \in [0.09, 0.11]$, so a matched line reads $\tilde v = 1$ and a step of height $\Gamma$ reads $1 + \Gamma$. Three input channels are built from it:
+\begin{itemize}
+    \item the normalised voltage $\tilde v$;
+    \item its time derivative $d\tilde v/dt$, from a Savitzky--Golay filter (window 11, degree 2), which sharpens echo edges while limiting noise;
+    \item a coordinate channel $t/T_{\mathrm{nom}}$ running from 0 to 2.5.
+\end{itemize}
+Each trace becomes a $[3, 1024]$ array.
 
 \subsection{Conventional TDR Solver (Rule-Based Baseline)}
-The conventional baseline implements textbook TDR reasoning with no learned parameters other than a handful of thresholds, all selected by grid search on the validation split (never on test) to maximise fault macro-F1 plus load macro-F1.
+The baseline follows textbook TDR reasoning. Its only tuned quantities are a handful of thresholds, chosen by grid search on the validation split to maximise fault plus load macro-$F_1$. It works in six steps:
 \begin{enumerate}
-    \item \textbf{Noise estimation:} $\hat{\sigma}_v = 1.4826\,\mathrm{MAD}(\Delta\tilde{v})/\sqrt{2}$ over $t/T\in[0.11,2.45]$ (robust to the few edges present), and $\hat{\sigma}_{dv}$ as the MAD of the derivative channel.
-    \item \textbf{Edge detection:} peaks of $|d\tilde{v}|$ above $k_\sigma\hat{\sigma}_{dv}$ in the fault window $t/T\in[0.11,1.00]$. A peak at sample $p$ is accepted if its step $\hat{\Gamma} = \mathrm{med}\,\tilde{v}_s[p{+}3{:}p{+}13] - \mathrm{med}\,\tilde{v}_s[p{-}13{:}p{-}3]$ satisfies $|\hat{\Gamma}| \ge \max(0.02, c\,\hat{\sigma}_v)$. The first accepted edge is the fault candidate; none gives \texttt{none}.
-    \item \textbf{Hard faults:} decided only from the level after the edge relative to the level before it, $\rho = L_{\mathrm{after}}/L_{\mathrm{before}}$ with $L_{\mathrm{after}}$ the median over $[t_e{+}0.05,\min(t_e{+}0.25,1)]$: $\rho<a\Rightarrow$ \texttt{short}, $\rho>b\Rightarrow$ \texttt{open}. The end-of-trace level is deliberately not used, because it is set by the load.
-    \item \textbf{Soft faults by shape:} a persistent step down/up gives \texttt{shunt\_R}/\texttt{series\_R}; an excursion that returns to the pre-edge level within the window of a short section is a transient: a positive bump, or a dip with comparable falling and rising edges, gives \texttt{z0\_section}, and a sharp dip with slow recovery gives \texttt{shunt\_C}.
-    \item \textbf{Location:} $\hat{d}/l = t_e/T - 0.05$, with $t_e$ the half-amplitude crossing of the edge.
-    \item \textbf{Load (DC de-embedding):} from the settled end level $L_{\mathrm{end}}$ (median over $t/T\in[2.30,2.45]$) the input impedance is $Z_{\mathrm{in}} = Z_0 L_{\mathrm{end}}/(2-L_{\mathrm{end}})$. The estimated soft fault is removed (series: $Z_{\mathrm{in}}-R_f$; shunt: $(Z_{\mathrm{in}}^{-1}-R_f^{-1})^{-1}$, with $R_f$ from $\hat{\Gamma}$), then the line resistance $r_{dc}l$ is subtracted to give $\hat{R}_L$. The over/undershoot after the load echo distinguishes \texttt{RL}/\texttt{RC}; $|\Gamma_{dc}|$ small gives \texttt{matched}; $\hat{R}_L$ thresholds give \texttt{open}/\texttt{short}; $\hat{\tau}/T$ comes from a log-linear fit of the tail.
+    \item \textbf{Noise.} It makes robust (MAD-based) estimates of the noise on $\tilde v$ and on $d\tilde v/dt$.
+    \item \textbf{Edges.} It looks for derivative peaks above $k_\sigma$ times the noise in the fault window $t/T \in [0.11, 1.0]$. A peak is accepted when the median level after it differs from the median level before it by at least $\max(0.02, c\,\hat\sigma)$. The first accepted edge is the fault, and no edge means \texttt{none}.
+    \item \textbf{Hard faults.} It compares the level after the edge with the level before it. If their ratio is below $a$ the fault is a \texttt{short}; above $b$ it is an \texttt{open}. The end-of-trace level is not used, because it depends on the load.
+    \item \textbf{Soft faults by shape.} A lasting step down or up means \texttt{shunt\_R} or \texttt{series\_R}. A short excursion that returns to the earlier level is a transient: a bump, or a symmetric dip, means \texttt{z0\_section}, and a sharp dip with slow recovery means \texttt{shunt\_C}.
+    \item \textbf{Location.} The position is $\hat d/l = t_e/T - 0.05$, where $t_e$ is the half-amplitude crossing of the edge.
+    \item \textbf{Load.} The settled end level $L_{\mathrm{end}}$ gives the DC input impedance $Z_{\mathrm{in}} = Z_0 L_{\mathrm{end}}/(2 - L_{\mathrm{end}})$. The estimated soft fault and the line's own resistance are removed from it to give $\hat R_L$. Overshoot or undershoot after the load echo separates \texttt{RL} from \texttt{RC}, and $\hat\tau$ comes from a log-linear fit of the transient tail.
 \end{enumerate}
 
 \subsection{LightGBM with 94 Physics Features}
-We engineer 94 features from the preprocessed 3-channel input:
+From each preprocessed trace we compute 94 features:
 \begin{itemize}
-    \item \textbf{Coarse waveform (64):} bin averages of $\tilde{v}$ over 64 equal time bins.
-    \item \textbf{Level statistics (7):} final level, minimum, maximum and their times for $t/T>0.11$, and mean levels over $[0.11,1.0]$ and $[1.0,2.5]$.
-    \item \textbf{Edges (16):} for the four largest $|d\tilde{v}|$ peaks: time, signed peak height, local step size and half-maximum width.
-    \item \textbf{First discontinuity (2):} first-edge reflection estimate $\hat{\Gamma}_1$ and impedance ratio $(1+\hat{\Gamma}_1)/(1-\hat{\Gamma}_1)$.
-    \item \textbf{Load region (4):} level over $[0.90,0.97]$, overshoot and undershoot relative to the final level, and $\hat{\tau}/T$ from a log-linear tail fit.
-    \item \textbf{Noise (1):} robust noise estimate $\hat{\sigma}$.
+    \item 64 bin averages of $\tilde v$ (a coarse copy of the waveform);
+    \item 7 level statistics: final, minimum and maximum levels, their times, and two window means;
+    \item 16 edge features: time, height, step and width of the four strongest derivative peaks;
+    \item the first-edge reflection estimate $\hat\Gamma_1$ and impedance ratio $(1+\hat\Gamma_1)/(1-\hat\Gamma_1)$;
+    \item 4 load-region features: the level before the load echo, overshoot, undershoot and a fitted $\hat\tau$;
+    \item the noise estimate.
 \end{itemize}
-Four LightGBM \cite{ke2017lightgbm} models are trained: fault class (multiclass), location (regression on faulted samples), load class (multiclass where the load is observable) and load values ($\log_{10}R_L$ and $\log_{10}\tau/T$, each on its own mask). Each uses up to 3000 trees (learning rate 0.05, 63 leaves) with early stopping after 100 rounds on the validation set. Training uses two independent noisy copies of the training set (SNR drawn uniformly in [20, 50] dB per sample).
+Four LightGBM \cite{ke2017lightgbm} models are trained on these features, one each for the fault class, the location (faulted traces only), the load class (observable loads only) and the load values ($\log_{10}R_L$, $\log_{10}\tau/T$). Each model uses up to 3,000 trees (learning rate 0.05, 63 leaves) with early stopping after 100 rounds without validation improvement. The training set is used twice, each time with independent noise at SNR drawn uniformly from 20--50~dB.
 
-\subsection{Deep Multi-Task 1D-ResNet Architecture}
-To exploit continuous temporal hierarchies and avoid manual feature design, we design a deep Multi-Task 1D-ResNet \cite{he2016deep} operating directly on the $[3, 1024]$ input tensor:
+\subsection{Multi-Task 1-D ResNet}
+The third method learns its own features from the raw trace. It is a multi-task 1-D residual network \cite{he2016deep} that takes the $[3, 1024]$ input directly:
 \begin{itemize}
-    \item \textbf{Stem Layer:} A 1D convolution with kernel size 7, stride 2, padding 3 mapping $3 \to 32$ channels, followed by 1D Batch Normalization and ReLU activation, reducing sequence length to 512.
-    \item \textbf{Four Residual Stages:} Each stage comprises two residual blocks with skip connections:
-    \begin{itemize}
-        \item Stage 1: 32 channels, stride 1 (length 512).
-        \item Stage 2: 64 channels, stride 2 (length 256).
-        \item Stage 3: 128 channels, stride 2 (length 128).
-        \item Stage 4: 128 channels, stride 2 (length 64).
-    \end{itemize}
-    \item \textbf{Latent Embedding:} the $128\times64$ feature map is flattened (8192 values; flattening, unlike global pooling, keeps the absolute time position needed for fault location), followed by 20\% dropout, a linear projection $8192 \to 256$ and ReLU.
-    \item \textbf{Task-Specific Prediction Heads:}
-    \begin{itemize}
-        \item Head 1 (T1 Fault): Linear($256 \to 7$) producing class logits $\mathbf{z}_{\mathrm{fault}}$.
-        \item Head 2 (T2 Location): Linear($256 \to 1$) followed by Sigmoid activation, constraining $\hat{d}/l \in [0, 1]$.
-        \item Head 3 (T3 Load Class): Linear($256 \to 6$) producing class logits $\mathbf{z}_{\mathrm{load}}$.
-        \item Head 4 (T3 Load Values): Linear($256 \to 2$) regressing log-scaled parameters $[\log_{10} \hat{R}_L, \log_{10}(\hat{\tau}/T)]$.
-    \end{itemize}
+    \item \textbf{Backbone.} A stem convolution (kernel 7, stride 2, $3 \to 32$ channels, batch normalisation, ReLU) is followed by four residual stages of two blocks each. The stages have 32, 64, 128 and 128 channels with strides 1, 2, 2 and 2, so the sequence shrinks from 1024 samples to 64.
+    \item \textbf{Shared embedding.} The $128 \times 64$ feature map is flattened into 8,192 values and passed through 20\% dropout and a linear layer to a 256-dimensional embedding. We flatten instead of using global pooling because flattening keeps the absolute time position, which fault location needs.
+    \item \textbf{Four heads,} each a linear layer on the embedding, give the fault logits (7 classes), the fault location $\hat d/l$ (through a sigmoid, so that it stays in $[0,1]$), the load logits (6 classes) and $[\log_{10}\hat R_L, \log_{10}(\hat\tau/T)]$.
 \end{itemize}
 
-\subsection{Training Protocol}
-The ResNet is trained with AdamW (learning rate $2\times10^{-3}$, weight decay $10^{-4}$, batch size 256) for at most 40 epochs, with a one-epoch linear warm-up followed by cosine decay, early stopping on the validation loss (patience 8), and mixed precision on GPU. Fresh measurement noise (SNR uniform in [20, 50] dB per sample) is drawn for every batch, so the network never sees the same noisy trace twice; noise injection and preprocessing run on the GPU. The validation set uses one fixed noisy copy at 30 dB. Channels are standardised with statistics from the training set. Main results are reported as mean $\pm$ standard deviation over three seeds.
-
-\subsection{Physics-Masked Multi-Task Loss Formulation}
-Joint multi-task optimization is governed by our physics-masked loss function:
+\textbf{Physics-masked loss.} The four heads are trained together with one loss:
 \begin{equation}
-\mathcal{L}_{\mathrm{total}} = w_1 \mathcal{L}_{\mathrm{fault}} + w_2 \mathcal{L}_{\mathrm{loc}} + w_3 \mathcal{L}_{\mathrm{load\_cls}} + w_4 \mathcal{L}_{\mathrm{load\_reg}}
+\begin{aligned}
+\mathcal{L} = {} & \mathrm{CE}_{\mathrm{fault}} + 10\, \frac{\sum_i m^{\mathrm{loc}}_i\, \mathrm{Huber}_{0.02}\!\left(\hat d_i/l - d_i/l\right)}{\sum_i m^{\mathrm{loc}}_i} \\
+& + \frac{\sum_i m^{\mathrm{load}}_i\, \mathrm{CE}_{\mathrm{load},i}}{\sum_i m^{\mathrm{load}}_i} + \frac{\sum_i m^{\mathrm{reg}}_i\, \mathrm{Huber}_{0.1}\!\left(\hat{\mathbf r}_i - \mathbf r_i\right)}{\sum_i m^{\mathrm{reg}}_i}
+\end{aligned}
 \label{eq:total_loss}
 \end{equation}
-where loss balancing weights are set to $w_1 = 1.0, w_2 = 5.0, w_3 = 1.0, w_4 = 2.0$.
+The masks follow the physics of Section~\ref{sec:theory}. $m^{\mathrm{loc}} = 1$ only when a fault exists. $m^{\mathrm{load}} = 1$ only when the fault is not a short or open, since otherwise no wave reaches the load. $m^{\mathrm{reg}}$ further selects the traces on which $R_L$ or $\tau$ is defined. A target that does not physically exist therefore never produces a gradient. Location gets a weight of 10 because its Huber loss on $d/l$ is numerically small.
 
-The component losses strictly respect the physical masking conditions:
-\begin{enumerate}
-    \item \textbf{Fault Classification Loss (Unmasked):}
-    \begin{equation}
-    \mathcal{L}_{\mathrm{fault}} = -\log\left( \frac{\exp(z_{\mathrm{fault}, y_1})}{\sum_{c=1}^7 \exp(z_{\mathrm{fault}, c})} \right)
-    \end{equation}
-    \item \textbf{Fault Location Loss (Masked on Fault Presence):} Evaluated only when true fault class is not \texttt{none} ($m_{\mathrm{loc}} = \mathbb{I}(y_1 \ne \text{\texttt{none}})$):
-    \begin{equation}
-    \mathcal{L}_{\mathrm{loc}} = \frac{\sum_{i=1}^B m_{\mathrm{loc}, i} \cdot \mathrm{Smooth}_{L_1}(\hat{d}_i/l - d_i/l)}{\sum_{i=1}^B m_{\mathrm{loc}, i} + \epsilon}
-    \end{equation}
-    \item \textbf{Load Classification Loss (Masked on Transmissibility):} Evaluated only when the fault is not a hard short or open ($m_{\mathrm{load}} = \mathbb{I}(y_1 \notin \{\text{\texttt{short}}, \text{\texttt{open}}\})$):
-    \begin{equation}
-    \mathcal{L}_{\mathrm{load\_cls}} = \frac{\sum_{i=1}^B m_{\mathrm{load}, i} \cdot \mathrm{CE}(\mathbf{z}_{\mathrm{load}, i}, y_{3, i})}{\sum_{i=1}^B m_{\mathrm{load}, i} + \epsilon}
-    \end{equation}
-    \item \textbf{Load Value Regression Loss (Masked):}
-    \begin{equation}
-    \mathcal{L}_{\mathrm{load\_reg}} = \frac{\sum_{i=1}^B m_{\mathrm{load}, i} \cdot \mathrm{Smooth}_{L_1}(\hat{\mathbf{r}}_i - \mathbf{r}_i)}{\sum_{i=1}^B m_{\mathrm{load}, i} + \epsilon}
-    \end{equation}
-\end{enumerate}
-Masking guarantees that non-existent targets never inject corrupting gradients into the shared residual backbone.
-
+\textbf{Training.} We use AdamW with learning rate $2\times10^{-3}$, weight decay $10^{-4}$ and batch size 256, for at most 40 epochs. The learning rate warms up linearly over one epoch and then follows a cosine decay. Training stops early on the validation loss (patience 8) and uses mixed precision on the GPU. Fresh noise (SNR uniform in 20--50~dB) is drawn for every batch, so the network never sees the same noisy trace twice. The validation split uses one fixed noisy copy at 30~dB. Input channels are standardised with training-set statistics. Main results are the mean $\pm$ standard deviation over three seeds.

@@ -1,4 +1,4 @@
-\section{Experimental Results \& Evaluation}
+\section{Results}
 \label{sec:results}
 
 All results come from the full run on a Kaggle T4 GPU (60,000 training traces). The complete pipeline, from data generation to figures, took 135~min: 3~min to generate the data, 4~min to tune the conventional detector, 63~min for the seven LightGBM suites, 51~min for the twelve ResNet runs (about 9.4~s per epoch) and 14~min for evaluation.
@@ -12,33 +12,33 @@ Table~\ref{tab:main_results} gives the headline comparison at 30~dB. The multi-t
 \end{itemize}
 LightGBM is second on all three tasks and has the lowest error on the load resistance (MAPE 12.1\%). The ResNet has the lowest errors on the derived inductance and capacitance (18.6\% and 17.2\%, against 22.6\% and 24.3\% for LightGBM). The conventional detector's time-constant estimate is unreliable on lossy lines, so its $L$ and $C$ errors exceed 130\%.
 
-\begin{table*}[t]
+\begin{table}[!htbp]
 \centering
 \caption{Main comparison on the held-out test split (10,000 traces, 30~dB). LightGBM and ResNet1D: mean $\pm$ standard deviation over three training seeds. The conventional detector is deterministic.}
 \label{tab:main_results}
-\resizebox{\textwidth}{!}{
-\input{tables/main_comparison.tex}
+\resizebox{\textwidth}{!}{%
+\input{tables/main_comparison.tex}%
 }
-\end{table*}
+\end{table}
 
 The location metrics reveal two different error profiles.
 \begin{itemize}
     \item \emph{Conventional detector.} It has the best median error (0.91~m) and the highest share of faults located within 1~m (51.7\%). When it finds the echo edge, it times it to the nearest output sample, which is $2.5\,l/2048 \approx 0.12$~m on a 100~m cable. However, it finds an edge for only 66.6\% of the faulted traces. A missed fault is assigned $d/l = 0.5$, and these misses produce its 36~m $P_{90}$.
     \item \emph{Learned models.} They detect far more faults, so their error tails are much shorter. Their regression output is less sharp, which gives a larger median error (1.4--1.6~m).
 \end{itemize}
-The ResNet's seed spread comes mostly from seed~2, which early stopping ended after 20 epochs (Section~\ref{sec:discussion}).
+The ResNet's seed spread comes mostly from seed~2, which early stopping ended after 20 epochs (Section~\ref{sec:limitations}).
 
 Fig.~\ref{fig:confusion} shows where the classification errors occur. Both learned models recognise short and open faults almost perfectly (per-class $F_1 = 1.00$ for the ResNet). Nearly all of their remaining fault errors are weak faults predicted as \texttt{none}: for the seed-0 ResNet, 21\% of shunt capacitances and 30\% of $Z_0$ sections are called fault-free. In the other direction, 7\% of fault-free lines are flagged as $Z_0$ sections. The conventional detector shows the same pattern much more strongly, reporting 49\% of shunt-$C$ and 66\% of $Z_0$-section faults as \texttt{none}.
 
 For the load, the learned models keep at least 88\% recall on every class. Their errors are mostly between the $R$ class and the reactive classes; for example, LightGBM labels 7\% of $RL$ loads as $R$. The conventional detector assigns 22--27\% of the reactive loads and 16\% of the matched loads to $R$.
 
-\begin{figure*}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.49\textwidth]{fig_confusion_fault.pdf}\hfill
-\includegraphics[width=0.49\textwidth]{fig_confusion_load.pdf}
-\caption{Row-normalised confusion matrices on the test split at 30~dB (seed-0 models). Left: fault class (7 classes). Right: load class, over traces where the load is observable (no short or open fault).}
+\includegraphics[width=0.68\textwidth]{fig_confusion_fault.pdf}\\[4pt]
+\includegraphics[width=0.68\textwidth]{fig_confusion_load.pdf}
+\caption{Row-normalised confusion matrices on the test split at 30~dB (seed-0 models). Top: fault class (7 classes). Bottom: load class, over traces where the load is observable (no short or open fault).}
 \label{fig:confusion}
-\end{figure*}
+\end{figure}
 
 \subsection{E2: Noise Sweep}
 Table~\ref{tab:noise_sweep} and Fig.~\ref{fig:noise_sweep} show performance from 60 to 15~dB. The ordering ResNet $>$ LightGBM $>$ conventional holds at every SNR, for fault $F_1$, location MAE and load accuracy.
@@ -47,21 +47,21 @@ At high SNR the learned models approach the limits of the task. At 60~dB the Res
 
 Below the 20--50~dB training range the two learned models degrade differently. Between 20 and 15~dB, LightGBM's load accuracy falls from 86.4\% to 63.0\%, while the ResNet's falls only from 91.6\% to 84.3\%. LightGBM depends on hand-crafted edge features (peak times, step sizes), and these become unreliable once noise peaks are as large as the echoes.
 
-\begin{table*}[t]
+\begin{table}[!htbp]
 \centering
 \caption{Noise sweep on the test split (seed-0 models). Training used SNR uniform in 20--50~dB, so 15 and 60~dB are outside the training range.}
 \label{tab:noise_sweep}
-\resizebox{\textwidth}{!}{
-\input{tables/noise_sweep.tex}
+\resizebox{\textwidth}{!}{%
+\input{tables/noise_sweep.tex}%
 }
-\end{table*}
+\end{table}
 
-\begin{figure*}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\textwidth]{fig_noise_sweep.pdf}
+\includegraphics[width=0.74\textwidth]{fig_noise_sweep.pdf}
 \caption{Fault macro-$F_1$, location MAE and load accuracy against SNR for the three methods.}
 \label{fig:noise_sweep}
-\end{figure*}
+\end{figure}
 
 \subsection{E3: Out-of-Distribution Generalisation}
 Table~\ref{tab:ood} and Fig.~\ref{fig:ood} report the five OOD subsets. As an in-distribution reference, the seed-0 ResNet scores $F_1 = 0.854$, MAE 5.67~m and 96.9\% load accuracy at 30~dB.
@@ -73,32 +73,32 @@ Table~\ref{tab:ood} and Fig.~\ref{fig:ood} report the five OOD subsets. As an in
 \end{itemize}
 On every subset the three methods keep the same ranking as in distribution.
 
-\begin{table*}[t]
+\begin{table}[!htbp]
 \centering
 \caption{Out-of-distribution subsets (1,000 traces each, 30~dB, seed-0 models).}
 \label{tab:ood}
-\resizebox{\textwidth}{!}{
-\input{tables/ood_metrics.tex}
+\resizebox{\textwidth}{!}{%
+\input{tables/ood_metrics.tex}%
 }
-\end{table*}
+\end{table}
 
-\begin{figure*}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\textwidth]{fig_ood.pdf}
+\includegraphics[width=0.72\textwidth]{fig_ood.pdf}
 \caption{Fault macro-$F_1$ (a) and location MAE (b) on the five OOD subsets.}
 \label{fig:ood}
-\end{figure*}
+\end{figure}
 
 \subsection{E4: Where the Errors Come From}
-For the resistive and $Z_0$-section faults (4,332 test traces, the classes with a single nominal $\Gamma$), the ResNet's location error depends strongly on reflection strength (Fig.~\ref{fig:loc_breakdown}, bottom). For $|\Gamma| \ge 0.2$ the MAE is 1.0--1.7~m. For $|\Gamma| < 0.2$, which covers 3,040 of these traces, it is 14.5~m. The location error is therefore concentrated in weak discontinuities.
+For the resistive and $Z_0$-section faults (4,332 test traces, the classes with a single nominal $\Gamma$), the ResNet's location error depends strongly on reflection strength (Fig.~\ref{fig:loc_breakdown}, right). For $|\Gamma| \ge 0.2$ the MAE is 1.0--1.7~m. For $|\Gamma| < 0.2$, which covers 3,040 of these traces, it is 14.5~m. The location error is therefore concentrated in weak discontinuities.
 
-Plotted against position over all faulted traces (Fig.~\ref{fig:loc_breakdown}, top), the error is U-shaped. It is lowest near the middle of the line (3.5~m at $d/l \approx 0.57$) and highest at the ends (10.1~m at $d/l \approx 0.14$ and 14.3~m at $d/l \approx 0.91$). This is what one expects from a regression head that falls back towards the centre of the line when it cannot see the echo. The same behaviour explains why the median error is much smaller than the mean.
+Plotted against position over all faulted traces (Fig.~\ref{fig:loc_breakdown}, left), the error is U-shaped. It is lowest near the middle of the line (3.5~m at $d/l \approx 0.57$) and highest at the ends (10.1~m at $d/l \approx 0.14$ and 14.3~m at $d/l \approx 0.91$). This is what one expects from a regression head that falls back towards the centre of the line when it cannot see the echo. The same behaviour explains why the median error is much smaller than the mean.
 
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.92\columnwidth]{fig_loc_error_vs_position.pdf}\\[2pt]
-\includegraphics[width=0.92\columnwidth]{fig_loc_error_vs_gamma.pdf}
-\caption{ResNet location MAE on the test split (30~dB) by fault position $d/l$ (top) and by nominal reflection strength $|\Gamma|$ of resistive and $Z_0$-section faults (bottom).}
+\includegraphics[width=0.42\textwidth]{fig_loc_error_vs_position.pdf}\hspace{0.04\textwidth}
+\includegraphics[width=0.42\textwidth]{fig_loc_error_vs_gamma.pdf}
+\caption{ResNet location MAE on the test split (30~dB) by fault position $d/l$ (left) and by nominal reflection strength $|\Gamma|$ of resistive and $Z_0$-section faults (right).}
 \label{fig:loc_breakdown}
 \end{figure}
 
@@ -109,13 +109,12 @@ Table~\ref{tab:recall} measures the detection limit directly.
 \end{itemize}
 $Z_0$ sections remain the hardest class for every method. Their echo is a positive--negative pair separated by the section's round-trip time ($2w/u \approx 5$--$30$~ns). The two halves partly cancel once rise time and loss smear the edges together.
 
-\begin{table}[t]
+\begin{table}[!htbp]
 \centering
 \caption{Detection recall versus nominal reflection strength on the test split at 30~dB (seed-0 models). Each cell gives detected (predicted $\ne$ \texttt{none}) / correctly classified, in \%. Shunt-$C$ reflection depends on frequency, so it is pooled.}
 \label{tab:recall}
-\resizebox{\columnwidth}{!}{
+\footnotesize
 \input{tables/recall_vs_gamma_wide.tex}
-}
 \end{table}
 
 \subsection{E5: Sample Efficiency}
@@ -123,20 +122,18 @@ The learning curves (Table~\ref{tab:learning_curve} and Fig.~\ref{fig:learning_c
 
 Both curves are still rising at the full training set. For the ResNet, going from 50\% to 100\% of the data adds 0.007 in $F_1$ and lowers the MAE by 0.4~m. More simulated data would therefore still help, but only modestly.
 
-\begin{table}[t]
+\begin{figure}[!htbp]
 \centering
-\caption{Learning curves (seed 0, validation split, 30~dB).}
+\begin{minipage}[c]{0.50\textwidth}\centering
+\captionof{table}{Learning curves (seed 0, validation split, 30~dB).}
 \label{tab:learning_curve}
-\resizebox{\columnwidth}{!}{
-\input{tables/learning_curve.tex}
-}
-\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{fig_learning_curve.pdf}
+\resizebox{\linewidth}{!}{\input{tables/learning_curve.tex}}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_learning_curve.pdf}
 \caption{Validation fault macro-$F_1$ against the fraction of the training split used.}
 \label{fig:learning_curve}
+\end{minipage}
 \end{figure}
 
 \subsection{E6: Ablations}
@@ -148,30 +145,29 @@ The $(\tilde v, d\tilde v/dt)$ run scores lower (0.837, 7.65~m), but this does n
 
 \emph{Does multi-task learning help?} For classification it is neutral: separate fault and load networks reach the same $F_1$ (0.854) and load accuracy (97.0\%) as the shared network. For location it costs accuracy: a network trained only for location reaches an MAE of 4.48~m, against 5.71~m for the multi-task model. The shared backbone is a compromise between the three objectives, and the regression task loses most. In return, the multi-task model needs one network and one forward pass instead of three.
 
-\begin{table}[t]
+\begin{table}[!htbp]
 \centering
 \caption{ResNet ablations (seed 0, validation split, 30~dB). ``--'' marks tasks a single-task network was not trained for. The last column gives the epochs actually run and, in brackets, the epoch of the saved checkpoint.}
 \label{tab:ablations}
-\resizebox{\columnwidth}{!}{
+\footnotesize
 \input{tables/ablations.tex}
-}
 \end{table}
 
-\begin{figure*}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\textwidth]{fig_ablation.pdf}
+\includegraphics[width=0.85\textwidth]{fig_ablation.pdf}
 \caption{ResNet ablations on the validation split. Each panel shows only the runs trained for that task.}
 \label{fig:ablation}
-\end{figure*}
+\end{figure}
 
 \subsection{E7: What LightGBM Looks At}
 Fig.~\ref{fig:shap} ranks the inputs of the LightGBM fault classifier by mean $|$SHAP$|$. Two features stand out: the averaged trace levels over $t/T_{\mathrm{nom}} = 1.02$--$1.05$ and $0.98$--$1.02$. Both lie just before the load echo, which arrives at $t/T_{\mathrm{nom}} \approx 1.05$.
 
 These levels are informative for a simple reason. Before the load echo arrives, the normalised trace is close to 1 on a fault-free line and close to $1 + \Gamma_f$ after a resistive or hard fault. A single level just before the load echo therefore summarises whether and how the line has changed. The next most important features are the times of the strongest edges (\texttt{edge1\_time}, \texttt{edge2\_time}), which carry the fault position. The explicit physics features (first-edge $\hat\Gamma$ and $Z/Z_0$) rank lower because the binned levels already contain the same information.
 
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\columnwidth]{fig_shap.pdf}
+\includegraphics[width=0.46\textwidth]{fig_shap.pdf}
 \caption{Top 20 LightGBM fault-classifier features by mean $|$SHAP$|$ (2,000 test traces, 30~dB, averaged over the seven classes). \texttt{v\_binNN} is the mean of $\tilde v$ over the indicated $t/T_{\mathrm{nom}}$ interval; \texttt{edgeK} is the $K$-th strongest edge of $d\tilde v/dt$.}
 \label{fig:shap}
 \end{figure}
@@ -182,33 +178,25 @@ Table~\ref{tab:real_data} lists the round-trip time of the strongest echo in eac
 
 \emph{Velocity factor.} The shorted, undamaged 80~m cable gives a negative echo after 0.836~$\mu$s, so $v_f = 2l/(c\,t) = 0.638$. This is 3\% below the 0.66 assumed by our simulator, and we use it as the estimate for the other records.
 
-\emph{Damage location.} In the damaged record the strongest echo arrives after 0.402~$\mu$s. By echo-time ratio this places the $120^\circ$ shield cutaway at 38.5~m, against the documented 40~m: an error of $-1.5$~m, or 1.9\% of the cable length (Table~\ref{tab:real_loc}). At the nominal velocity factor the estimate would be 39.8~m. One place in the catalogue gives the cable length as 85~m instead of 80~m. With 85~m, the velocity factor would be 0.678 and the cutaway would lie at 40.9~m, so the localisation is within 1.5~m either way.
+\emph{Damage location.} In the damaged record the strongest echo arrives after 0.402~$\mu$s. By echo-time ratio this places the $120^\circ$ shield cutaway at 38.5~m, against the documented 40~m: an error of $-1.5$~m, or 1.9\% of the cable length. At the nominal velocity factor the estimate would be 39.8~m. One place in the catalogue gives the cable length as 85~m instead of 80~m. With 85~m, the velocity factor would be 0.678 and the cutaway would lie at 40.9~m, so the localisation is within 1.5~m either way.
 
 \emph{Echo polarity.} The cutaway echo is \emph{positive}, which means the line impedance rises locally. This is expected: removing part of the shield lowers the local capacitance and raises the local inductance. It is the physical counterpart of our $Z_0$-section class with $Z_0' > Z_0$. The damage echo is, however, larger than the recorded incident pulse, which a passive discontinuity cannot produce. We therefore use only its timing, not its amplitude.
 
 \emph{Inconsistent records.} The three records documented as 20, 10 and 5~m cables do not match their labels: their echoes correspond to 80.6, 38.5 and 13.1~m at the estimated velocity factor. The ``20~m'' echo time (0.842~$\mu$s) matches the undamaged 80~m record, and the ``10~m'' echo time (0.402~$\mu$s) matches the damaged one. This suggests that these files were mislabelled in the public release. We report them but exclude them from the velocity estimate.
 
-\begin{table*}[t]
+\begin{table}[!htbp]
 \centering
 \caption{Echo timing on the WISE-CASING laboratory records (pulse-type TDR; no ML applied). Distances use the velocity factor estimated from the undamaged 80~m record.}
 \label{tab:real_data}
-\resizebox{\textwidth}{!}{
-\input{tables/real_data.tex}
-}
-\end{table*}
-
-\begin{table}[t]
-\centering
-\caption{Localisation of the 40~m shield cutaway from the echo-time ratio.}
-\label{tab:real_loc}
-\resizebox{\columnwidth}{!}{
-\input{tables/real_damage_localisation.tex}
+\resizebox{\textwidth}{!}{%
+\input{tables/real_data.tex}%
 }
 \end{table}
 
-\begin{figure*}[t]
+
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\textwidth]{fig_real_data.pdf}
+\includegraphics[width=0.44\textwidth]{fig_real_data.pdf}
 \caption{WISE-CASING pulse-TDR records with the incident pulse peak, the strongest measured echo, and the echo time expected from the documented geometry at the velocity factor estimated from the undamaged 80~m record.}
 \label{fig:real_data}
-\end{figure*}
+\end{figure}
