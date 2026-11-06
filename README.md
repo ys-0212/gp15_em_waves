@@ -1,9 +1,22 @@
 # Machine-Learning-Based Transmission Line Fault and Load Identification via Time-Domain Reflectometry (TDR)
 
 **Course:** EE 305 Electromagnetic Waves, Indian Institute of Technology Indore (IIT Indore)  
-**Theme 4:** Machine-Learning-Based Transmission Line Fault and Load Identification  
-**Group 15:** Yogendra Singh (240002083), Dhananjay Dhumal (240051008), Gadgil Rucha Vinay (240002025), Karan Hitesh Bagthariya (240002028), Yash Brijesh Modi (240002082), Rohan Jain (240002060)  
-**Deliverables:** Complete tested codebase and the project report ([`report/report.pdf`](report/report.pdf), LaTeX source in `report/`).
+**Theme 4:** Machine-Learning-Based Transmission Line Fault and Load Identification
+
+### Team Details
+
+| S. No. | Name | Roll Number |
+|:---:|---|:---:|
+| 1 | Yogendra Singh | 240002083 |
+| 2 | Dhananjay Dhumal | 240051008 |
+| 3 | Gadgil Rucha Vinay | 240002025 |
+| 4 | Karan Hitesh Bagthariya | 240002028 |
+| 5 | Yash Brijesh Modi | 240002082 |
+| 6 | Rohan Jain | 240002060 |
+
+**Group:** 15
+
+**Deliverables:** Complete tested codebase and project report ([`report/report.pdf`](report/report.pdf), with LaTeX source in `report/`).
 
 ---
 
